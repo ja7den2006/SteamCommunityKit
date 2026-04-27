@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import html
+import re
 import time
 import xml.etree.ElementTree as ET
 from typing import Dict
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
-from steamcommunitykit.exceptions import SteamRateLimitError, SteamResponseError, SteamValidationError
+from steamcommunitykit.exceptions import (
+    SteamAuthenticationError,
+    SteamRateLimitError,
+    SteamResponseError,
+    SteamValidationError,
+)
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import AvailabilityResult, CreatedGroup
 from steamcommunitykit.utils import ensure_not_blank
@@ -64,6 +71,14 @@ class GroupsService:
             raw_text=response_text,
         )
 
+    @staticmethod
+    def _extract_error_page_message(text: str) -> str:
+        match = re.search(r'<div id="message">.*?<h3>(.*?)</h3>', text, re.S | re.I)
+        if not match:
+            return ""
+        cleaned = re.sub(r"<.*?>", "", match.group(1))
+        return html.unescape(cleaned).strip()
+
     def check_name_availability(self, name: str) -> AvailabilityResult:
         return self._availability_check("groupName", name)
 
@@ -116,23 +131,27 @@ class GroupsService:
         group_url: str,
         public: bool = True,
         wait_for_sync: float = 10.0,
+        validate_availability: bool = True,
     ) -> CreatedGroup:
         credentials = self.transport.require_community_credentials()
         name = ensure_not_blank(name, "name")
         abbreviation = ensure_not_blank(abbreviation, "abbreviation")
         group_url = ensure_not_blank(group_url, "group_url")
 
-        name_check = self.check_name_availability(name)
-        if not name_check.available:
-            raise SteamValidationError(name_check.message or "Group name is not available.")
+        if validate_availability:
+            name_check = self.check_name_availability(name)
+            if not name_check.available:
+                raise SteamValidationError(name_check.message or "Group name is not available.")
 
-        tag_check = self.check_tag_availability(abbreviation)
-        if not tag_check.available:
-            raise SteamValidationError(tag_check.message or "Group abbreviation is not available.")
+            tag_check = self.check_tag_availability(abbreviation)
+            if not tag_check.available:
+                raise SteamValidationError(
+                    tag_check.message or "Group abbreviation is not available."
+                )
 
-        url_check = self.check_url_availability(group_url)
-        if not url_check.available:
-            raise SteamValidationError(url_check.message or "Group URL is not available.")
+            url_check = self.check_url_availability(group_url)
+            if not url_check.available:
+                raise SteamValidationError(url_check.message or "Group URL is not available.")
 
         payload = {
             "sessionID": credentials.session_id,
@@ -144,32 +163,48 @@ class GroupsService:
         if public:
             payload["bIsPublic"] = "1"
 
-        self.transport.request(
+        first_response = self.transport.request(
             "POST",
             f"{COMMUNITY_BASE_URL}/actions/GroupCreate",
             data=payload,
             headers=self._headers(f"{COMMUNITY_BASE_URL}/actions/GroupCreate"),
             cookies=self._community_cookies(),
+            expected="raw",
         )
+        error_message = self._extract_error_page_message(first_response.text)
+        if error_message:
+            if "does not meet the requirements" in error_message.lower():
+                raise SteamAuthenticationError(error_message, status_code=403)
+            raise SteamValidationError(error_message)
 
-        self.transport.request(
+        second_response = self.transport.request(
             "POST",
             f"{COMMUNITY_BASE_URL}/actions/GroupCreate",
             data=payload,
             headers=self._headers(f"{COMMUNITY_BASE_URL}/actions/GroupCreate"),
             cookies=self._community_cookies(),
+            expected="raw",
         )
+        error_message = self._extract_error_page_message(second_response.text)
+        if error_message:
+            if "does not meet the requirements" in error_message.lower():
+                raise SteamAuthenticationError(error_message, status_code=403)
+            raise SteamValidationError(error_message)
 
         time.sleep(wait_for_sync)
-        final_url_check = self.check_url_availability(group_url)
-        if final_url_check.available:
-            raise SteamResponseError("Steam did not confirm the group creation after sync delay.")
+        try:
+            group_id = self.fetch_group_id(group_url)
+            group_id64 = self.fetch_group_id64(group_url)
+        except SteamResponseError as exc:
+            raise SteamResponseError(
+                "Steam did not confirm the group creation after sync delay."
+            ) from exc
 
         return CreatedGroup(
             name=name,
             abbreviation=abbreviation,
-            group_id=self.fetch_group_id(group_url),
-            group_id64=self.fetch_group_id64(group_url),
+            group_id=group_id,
+            group_id64=group_id64,
             group_url=group_url,
             public=public,
         )

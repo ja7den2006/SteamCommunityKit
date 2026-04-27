@@ -253,6 +253,16 @@ def test_remote_storage_subscribe_uses_api_base_url() -> None:
     client.close()
 
 
+def test_auth_build_qr_image_url_encodes_challenge_url() -> None:
+    client = SteamClient(api_key="test")
+
+    result = client.auth.build_qr_image_url("https://example.com/path?a=1&b=two")
+
+    assert result.startswith("https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=")
+    assert "https%3A%2F%2Fexample.com%2Fpath%3Fa%3D1%26b%3Dtwo" in result
+    client.close()
+
+
 def test_auth_community_credentials_from_login_uses_cookie_response() -> None:
     response = DummyResponse(json_data={"response": {"ok": True}})
     response.cookies = {"sessionid": "session123", "steamLoginSecure": "securecookie123"}
@@ -367,4 +377,90 @@ def test_group_availability_rate_limit_raises_specific_error() -> None:
     with pytest.raises(SteamRateLimitError):
         client.groups.check_name_availability("examplegroupname")
 
+    client.close()
+
+
+def test_create_group_raises_clear_error_for_account_restriction_page() -> None:
+    error_html = """
+    <html><body><div id="message"><h3>Your account does not meet the requirements to use this feature.</h3></div></body></html>
+    """
+    session = SequenceSession(
+        [
+            DummyResponse(text=error_html),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    with pytest.raises(SteamAuthenticationError):
+        client.groups.create_group(
+            name="examplegroup",
+            abbreviation="abc12",
+            group_url="examplegroup",
+            public=False,
+            wait_for_sync=0,
+            validate_availability=False,
+        )
+
+    client.close()
+
+
+def test_create_group_can_skip_availability_checks() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={}),
+            DummyResponse(json_data={}),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    original_name = client.groups.check_name_availability
+    original_tag = client.groups.check_tag_availability
+    original_url = client.groups.check_url_availability
+    original_fetch_id = client.groups.fetch_group_id
+    original_fetch_id64 = client.groups.fetch_group_id64
+
+    client.groups.check_name_availability = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("name availability should not be called")
+    )
+    client.groups.check_tag_availability = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("tag availability should not be called")
+    )
+    client.groups.check_url_availability = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("url availability should not be called")
+    )
+    client.groups.fetch_group_id = lambda _group_url: "1234"
+    client.groups.fetch_group_id64 = lambda _group_url: "76561198000000000"
+
+    created = client.groups.create_group(
+        name="examplegroup",
+        abbreviation="abc12",
+        group_url="examplegroup",
+        public=False,
+        wait_for_sync=0,
+        validate_availability=False,
+    )
+
+    client.groups.check_name_availability = original_name
+    client.groups.check_tag_availability = original_tag
+    client.groups.check_url_availability = original_url
+    client.groups.fetch_group_id = original_fetch_id
+    client.groups.fetch_group_id64 = original_fetch_id64
+
+    assert created.group_id == "1234"
+    assert created.group_id64 == "76561198000000000"
+    assert len(session.calls) == 2
     client.close()

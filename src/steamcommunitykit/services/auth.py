@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import base64
 import time
+import urllib.parse
 
 import jwt
 import rsa
 
-from steamcommunitykit.constants import COMMUNITY_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.constants import COMMUNITY_BASE_URL, QR_IMAGE_BASE_URL, WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult, QRAuthSession
 from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
@@ -94,6 +95,10 @@ class AuthenticationService:
             version=int(response.get("version", 1)),
             allowed_confirmations=response.get("allowed_confirmations", []),
         )
+
+    def build_qr_image_url(self, challenge_url: str) -> str:
+        encoded = urllib.parse.quote(ensure_not_blank(challenge_url, "challenge_url"), safe="")
+        return "{0}{1}".format(QR_IMAGE_BASE_URL, encoded)
 
     def wait_for_qr_approval(
         self,
