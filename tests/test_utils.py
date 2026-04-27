@@ -5,11 +5,13 @@ import pytest
 from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.utils import (
     load_api_key_from_json,
+    normalize_binary_value,
     normalize_app_ids,
     normalize_steam_ids,
     normalize_uint64_ids,
     validate_app_id,
     validate_steam_id,
+    validate_uint32,
     validate_uint64,
 )
 
@@ -50,3 +52,9 @@ def test_normalize_app_ids_handles_single_and_list_values() -> None:
 def test_validate_uint64_and_normalize_uint64_ids() -> None:
     assert validate_uint64("123456789", "published_file_id") == "123456789"
     assert normalize_uint64_ids([123, "456"], "published_file_id") == ["123", "456"]
+
+
+def test_validate_uint32_and_normalize_binary_value() -> None:
+    assert validate_uint32("5", "count") == 5
+    assert validate_uint32(0, "date_start", allow_zero=True) == 0
+    assert normalize_binary_value(b"\xde\xad\xbe\xef", "session_key") == "deadbeef"

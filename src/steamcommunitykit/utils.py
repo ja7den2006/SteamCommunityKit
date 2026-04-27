@@ -32,6 +32,22 @@ def validate_app_id(app_id: Union[str, int], field_name: str = "app_id") -> int:
     return value
 
 
+def validate_uint32(
+    value: Union[str, int],
+    field_name: str,
+    *,
+    allow_zero: bool = False,
+) -> int:
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SteamValidationError(f"{field_name} must be an integer.") from exc
+    if normalized < 0 or (normalized == 0 and not allow_zero):
+        comparator = "greater than or equal to zero" if allow_zero else "greater than zero"
+        raise SteamValidationError(f"{field_name} must be {comparator}.")
+    return normalized
+
+
 def validate_uint64(value: Union[str, int], field_name: str) -> str:
     normalized = str(value).strip()
     if not normalized.isdigit():
@@ -39,6 +55,14 @@ def validate_uint64(value: Union[str, int], field_name: str) -> str:
     if int(normalized) <= 0:
         raise SteamValidationError(f"{field_name} must be greater than zero.")
     return normalized
+
+
+def normalize_binary_value(value: Union[str, bytes, bytearray], field_name: str) -> str:
+    if isinstance(value, (bytes, bytearray)):
+        if not value:
+            raise SteamValidationError(f"{field_name} cannot be empty.")
+        return bytes(value).hex()
+    return ensure_not_blank(value, field_name)
 
 
 def normalize_steam_ids(

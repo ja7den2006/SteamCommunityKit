@@ -16,10 +16,13 @@ from steamcommunitykit.services import (
     NewsService,
     PlayersService,
     PublishedFilesService,
+    PublishedItemVotingService,
     RemoteStorageService,
     StoreService,
     UserStatsService,
+    UserAuthService,
     UsersService,
+    WorkshopService,
 )
 from steamcommunitykit.utils import load_api_key_from_json
 
@@ -53,7 +56,10 @@ class SteamClient:
         self.groups = GroupsService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
+        self.published_item_voting = PublishedItemVotingService(self._transport)
         self.remote_storage = RemoteStorageService(self._transport)
+        self.user_auth = UserAuthService(self._transport)
+        self.workshop = WorkshopService(self._transport)
 
     @property
     def api_key(self) -> Optional[str]:

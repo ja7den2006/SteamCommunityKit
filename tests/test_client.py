@@ -90,7 +90,10 @@ def test_client_exposes_expected_services() -> None:
     assert client.apps is not None
     assert client.store is not None
     assert client.published_files is not None
+    assert client.published_item_voting is not None
     assert client.remote_storage is not None
+    assert client.user_auth is not None
+    assert client.workshop is not None
     client.close()
 
 
@@ -249,6 +252,94 @@ def test_remote_storage_subscribe_uses_api_base_url() -> None:
     assert call["data"]["steamid"] == "76561197960435530"
     assert call["data"]["appid"] == 570
     assert call["data"]["publishedfileid"] == "123456"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_published_item_voting_uses_api_base_url_and_form_arrays() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"summary": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.published_item_voting.item_vote_summary("76561197960435530", 570, ["123456", "789012"])
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamPublishedItemVoting/ItemVoteSummary/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["count"] == 2
+    assert call["data"]["publishedfileid[0]"] == "123456"
+    assert call["data"]["publishedfileid[1]"] == "789012"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_user_auth_ticket_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"steamid": "76561197960435530"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.user_auth.authenticate_user_ticket(570, "abcdef", "server-1")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["ticket"] == "abcdef"
+    assert call["params"]["identity"] == "server-1"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_user_auth_authenticate_user_hex_encodes_binary_inputs() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"token": "ok"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.user_auth.authenticate_user(
+        "76561197960435530",
+        session_key=b"\xaa\xbb",
+        encrypted_login_key=b"\x01\x02",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamUserAuth/AuthenticateUser/v1/"
+    assert call["data"]["sessionkey"] == "aabb"
+    assert call["data"]["encrypted_loginkey"] == "0102"
+    client.close()
+
+
+def test_workshop_service_uses_input_json_on_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.workshop.set_item_payment_rules(
+        570,
+        99,
+        associated_workshop_files=[{"publishedfileid": "123456"}],
+        partner_accounts=[{"partner_account_id": 1, "percentage": 100}],
+        make_workshop_files_subscribable=True,
+        validate_only=True,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IWorkshopService/SetItemPaymentRules/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"gameitemid":99' in call["params"]["input_json"]
+    assert '"validate_only":true' in call["params"]["input_json"]
+    assert '"make_workshop_files_subscribable":true' in call["params"]["input_json"]
+    client.close()
+
+
+def test_workshop_get_item_daily_revenue_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"revenue": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.workshop.get_item_daily_revenue(570, 10, 0, 86400)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IWorkshopService/GetItemDailyRevenue/v1/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["item_id"] == 10
+    assert call["params"]["date_start"] == 0
+    assert call["params"]["date_end"] == 86400
     assert call["params"]["key"] == "test"
     client.close()
 
