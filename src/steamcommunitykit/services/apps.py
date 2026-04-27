@@ -4,7 +4,7 @@ from typing import Optional
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, validate_app_id
+from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_steam_id
 
 
 class AppsService:
@@ -43,6 +43,14 @@ class AppsService:
             require_api_key=True,
         )
 
+    def get_app_betas(self, app_id) -> dict:
+        return self.transport.request(
+            "GET",
+            f"{self.base_url}/GetAppBetas/v1/",
+            params={"appid": validate_app_id(app_id)},
+            require_api_key=True,
+        )
+
     def get_server_list(self, filter_query: str, limit: Optional[int] = None) -> dict:
         params = {"filter": ensure_not_blank(filter_query, "filter_query")}
         if limit is not None:
@@ -78,5 +86,30 @@ class AppsService:
             "GET",
             f"{self.base_url}/GetPlayersBanned/v1/",
             params={"appid": validate_app_id(app_id)},
+            require_api_key=True,
+        )
+
+    def set_app_build_live(
+        self,
+        app_id,
+        build_id: int,
+        beta_key: str,
+        *,
+        steam_id=None,
+        description: Optional[str] = None,
+    ) -> dict:
+        data = {
+            "appid": validate_app_id(app_id),
+            "buildid": int(build_id),
+            "betakey": ensure_not_blank(beta_key, "beta_key"),
+        }
+        if steam_id is not None:
+            data["steamid"] = validate_steam_id(steam_id)
+        if description:
+            data["description"] = ensure_not_blank(description, "description")
+        return self.transport.request(
+            "POST",
+            f"{self.base_url}/SetAppBuildLive/v2/",
+            data=data,
             require_api_key=True,
         )

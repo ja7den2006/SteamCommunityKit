@@ -90,9 +90,11 @@ def test_client_exposes_expected_services() -> None:
     assert client.apps is not None
     assert client.store is not None
     assert client.published_files is not None
+    assert client.published_item_search is not None
     assert client.published_item_voting is not None
     assert client.remote_storage is not None
     assert client.user_auth is not None
+    assert client.webapi_util is not None
     assert client.workshop is not None
     client.close()
 
@@ -129,6 +131,19 @@ def test_apps_service_partner_list_method_uses_api_base_url() -> None:
     call = session.calls[0]
     assert call["url"] == "https://api.steampowered.com/ISteamApps/GetPartnerAppListForWebAPIKey/v2/"
     assert call["params"]["type_filter"] == "game,tool"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_apps_service_get_app_betas_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"betas": []}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.apps.get_app_betas(570)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetAppBetas/v1/"
+    assert call["params"]["appid"] == 570
     assert call["params"]["key"] == "test"
     client.close()
 
@@ -341,6 +356,53 @@ def test_workshop_get_item_daily_revenue_uses_api_base_url() -> None:
     assert call["params"]["date_start"] == 0
     assert call["params"]["date_end"] == 86400
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_published_item_search_uses_api_base_url_and_tag_arrays() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"results": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.published_item_search.ranked_by_trend(
+        "76561197960435530",
+        570,
+        start_index=0,
+        count=20,
+        days=7,
+        tags=["Maps", "Competitive"],
+        user_tags=["Featured"],
+        has_app_admin_access=True,
+        file_type=0,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamPublishedItemSearch/RankedByTrend/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["startidx"] == 0
+    assert call["data"]["count"] == 20
+    assert call["data"]["days"] == 7
+    assert call["data"]["tagcount"] == 2
+    assert call["data"]["usertagcount"] == 1
+    assert call["data"]["tag[0]"] == "Maps"
+    assert call["data"]["tag[1]"] == "Competitive"
+    assert call["data"]["usertag[0]"] == "Featured"
+    assert call["data"]["hasappadminaccess"] == 1
+    assert call["data"]["fileType"] == 0
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_webapi_util_get_supported_api_list_can_use_public_mode() -> None:
+    session = RecordingSession(DummyResponse(json_data={"apilist": {"interfaces": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.webapi_util.get_supported_api_list()
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamWebAPIUtil/GetSupportedAPIList/v1/"
+    assert call["params"]["format"] == "json"
+    assert "key" not in call["params"]
     client.close()
 
 
