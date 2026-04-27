@@ -98,6 +98,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.workshop is not None
     assert client.community_api is not None
     assert client.cloud is not None
+    assert client.game_notifications is not None
     assert client.leaderboards is not None
     client.close()
 
@@ -512,6 +513,66 @@ def test_cloud_begin_http_upload_uses_input_json_form_body() -> None:
     assert '"upload_batch_id":"123456"' in call["data"]["input_json"]
     assert '"platforms_to_sync":["all","windows"]' in call["data"]["input_json"]
     assert '"is_public":false' in call["data"]["input_json"]
+    client.close()
+
+
+def test_game_notifications_create_session_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"sessionid": "123"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.game_notifications.create_session(
+        570,
+        "match-1",
+        "Competitive Match",
+        [{"steamid": "76561197960435530"}],
+        steam_id="76561197960435530",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/CreateSession/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"context":"match-1"' in call["params"]["input_json"]
+    assert '"title":"Competitive Match"' in call["params"]["input_json"]
+    assert '"users":[{"steamid":"76561197960435530"}]' in call["params"]["input_json"]
+    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
+    client.close()
+
+
+def test_game_notifications_enumerate_sessions_uses_get_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"sessions": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.game_notifications.enumerate_sessions_for_app(
+        570,
+        "76561197960435530",
+        include_all_user_messages=True,
+        include_auth_user_message=False,
+        language="en",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/EnumerateSessionsForApp/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
+    assert '"include_all_user_messages":true' in call["params"]["input_json"]
+    assert '"include_auth_user_message":false' in call["params"]["input_json"]
+    assert '"language":"en"' in call["params"]["input_json"]
+    client.close()
+
+
+def test_game_notifications_delete_session_batch_uses_session_id_list() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.game_notifications.delete_session_batch(570, ["123", 456])
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/DeleteSessionBatch/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"sessionids":["123","456"]' in call["params"]["input_json"]
     client.close()
 
 

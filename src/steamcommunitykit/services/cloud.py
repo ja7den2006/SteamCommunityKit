@@ -4,6 +4,7 @@ import json
 from typing import Iterable, Optional
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint32, validate_uint64
 
@@ -161,5 +162,5 @@ class CloudService:
     def _validate_sha1(value: str) -> str:
         normalized = ensure_not_blank(value, "file_sha").lower()
         if len(normalized) != 40 or any(char not in "0123456789abcdef" for char in normalized):
-            raise ValueError("file_sha must be a 40-character SHA1 hex digest.")
+            raise SteamValidationError("file_sha must be a 40-character SHA1 hex digest.")
         return normalized

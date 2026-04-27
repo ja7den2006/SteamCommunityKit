@@ -3,6 +3,7 @@ from steamcommunitykit.services.auth import AuthenticationService
 from steamcommunitykit.services.cloud import CloudService
 from steamcommunitykit.services.community_api import CommunityAPIService
 from steamcommunitykit.services.community import CommunityService
+from steamcommunitykit.services.game_notifications import GameNotificationsService
 from steamcommunitykit.services.groups import GroupsService
 from steamcommunitykit.services.leaderboards import LeaderboardsService
 from steamcommunitykit.services.news import NewsService
@@ -24,6 +25,7 @@ __all__ = [
     "CloudService",
     "CommunityAPIService",
     "CommunityService",
+    "GameNotificationsService",
     "GroupsService",
     "LeaderboardsService",
     "NewsService",
