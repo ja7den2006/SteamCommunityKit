@@ -98,6 +98,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.workshop is not None
     assert client.community_api is not None
     assert client.cloud is not None
+    assert client.econ is not None
     assert client.game_notifications is not None
     assert client.leaderboards is not None
     client.close()
@@ -573,6 +574,77 @@ def test_game_notifications_delete_session_batch_uses_session_id_list() -> None:
     assert call["params"]["key"] == "test"
     assert '"appid":570' in call["params"]["input_json"]
     assert '"sessionids":["123","456"]' in call["params"]["input_json"]
+    client.close()
+
+
+def test_econ_get_trade_history_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"trades": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ.get_trade_history(
+        max_trades=50,
+        start_after_time=0,
+        start_after_trade_id="1234567890",
+        navigating_back=False,
+        get_descriptions=True,
+        language="en",
+        include_failed=False,
+        include_total=True,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconService/GetTradeHistory/v1/"
+    assert call["params"]["max_trades"] == 50
+    assert call["params"]["start_after_time"] == 0
+    assert call["params"]["start_after_tradeid"] == "1234567890"
+    assert call["params"]["navigating_back"] == 0
+    assert call["params"]["get_descriptions"] == 1
+    assert call["params"]["language"] == "en"
+    assert call["params"]["include_failed"] == 0
+    assert call["params"]["include_total"] == 1
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_econ_get_trade_offers_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"trade_offers_sent": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ.get_trade_offers(
+        get_sent_offers=True,
+        get_received_offers=False,
+        get_descriptions=True,
+        language="en",
+        active_only=True,
+        historical_only=False,
+        time_historical_cutoff=0,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconService/GetTradeOffers/v1/"
+    assert call["params"]["get_sent_offers"] == 1
+    assert call["params"]["get_received_offers"] == 0
+    assert call["params"]["get_descriptions"] == 1
+    assert call["params"]["language"] == "en"
+    assert call["params"]["active_only"] == 1
+    assert call["params"]["historical_only"] == 0
+    assert call["params"]["time_historical_cutoff"] == 0
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_econ_flush_inventory_cache_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ.flush_inventory_cache("76561197960435530", 730, "2")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconService/FlushInventoryCache/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["appid"] == 730
+    assert call["data"]["contextid"] == "2"
+    assert call["params"]["key"] == "test"
     client.close()
 
 

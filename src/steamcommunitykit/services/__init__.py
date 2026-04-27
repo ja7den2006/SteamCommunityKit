@@ -1,6 +1,7 @@
 from steamcommunitykit.services.apps import AppsService
 from steamcommunitykit.services.auth import AuthenticationService
 from steamcommunitykit.services.cloud import CloudService
+from steamcommunitykit.services.econ import EconService
 from steamcommunitykit.services.community_api import CommunityAPIService
 from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.game_notifications import GameNotificationsService
@@ -23,6 +24,7 @@ __all__ = [
     "AppsService",
     "AuthenticationService",
     "CloudService",
+    "EconService",
     "CommunityAPIService",
     "CommunityService",
     "GameNotificationsService",

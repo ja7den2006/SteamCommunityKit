@@ -12,6 +12,7 @@ from steamcommunitykit.services import (
     AppsService,
     AuthenticationService,
     CloudService,
+    EconService,
     CommunityAPIService,
     CommunityService,
     GameNotificationsService,
@@ -59,6 +60,7 @@ class SteamClient:
         self.user_stats = UserStatsService(self._transport)
         self.auth = AuthenticationService(self._transport)
         self.cloud = CloudService(self._transport)
+        self.econ = EconService(self._transport)
         self.community_api = CommunityAPIService(self._transport)
         self.community = CommunityService(self._transport)
         self.game_notifications = GameNotificationsService(self._transport)
