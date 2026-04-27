@@ -96,6 +96,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.user_auth is not None
     assert client.webapi_util is not None
     assert client.workshop is not None
+    assert client.community_api is not None
     client.close()
 
 
@@ -271,6 +272,37 @@ def test_remote_storage_subscribe_uses_api_base_url() -> None:
     client.close()
 
 
+def test_remote_storage_get_ugc_file_details_requires_app_id() -> None:
+    session = RecordingSession(DummyResponse(json_data={"data": {"filename": "example"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.remote_storage.get_ugc_file_details("123456", 570, "76561197960435530")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/GetUGCFileDetails/v1/"
+    assert call["params"]["ugcid"] == "123456"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["steamid"] == "76561197960435530"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_remote_storage_set_ugc_used_by_gc_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.remote_storage.set_ugc_used_by_gc("76561197960435530", "123456", 570, True)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/SetUGCUsedByGC/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["ugcid"] == "123456"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["used"] == 1
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
 def test_published_item_voting_uses_api_base_url_and_form_arrays() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"summary": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -355,6 +387,56 @@ def test_workshop_get_item_daily_revenue_uses_api_base_url() -> None:
     assert call["params"]["item_id"] == 10
     assert call["params"]["date_start"] == 0
     assert call["params"]["date_end"] == 86400
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_user_stats_set_user_stats_for_game_uses_indexed_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.user_stats.set_user_stats_for_game(
+        "76561197960435530",
+        570,
+        {"kills_total": 5, "has_completed_tutorial": True},
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamUserStats/SetUserStatsForGame/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["count"] == 2
+    assert call["data"]["name[0]"] == "kills_total"
+    assert call["data"]["value[0]"] == 5
+    assert call["data"]["name[1]"] == "has_completed_tutorial"
+    assert call["data"]["value[1]"] == 1
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_community_api_report_abuse_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"eresult": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.community_api.report_abuse(
+        "76561197960435530",
+        "76561197972495328",
+        570,
+        1,
+        2,
+        "Test report",
+        gid="1234567890",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamCommunity/ReportAbuse/v1/"
+    assert call["data"]["steamidActor"] == "76561197960435530"
+    assert call["data"]["steamidTarget"] == "76561197972495328"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["abuseType"] == 1
+    assert call["data"]["contentType"] == 2
+    assert call["data"]["description"] == "Test report"
+    assert call["data"]["gid"] == "1234567890"
     assert call["params"]["key"] == "test"
     client.close()
 

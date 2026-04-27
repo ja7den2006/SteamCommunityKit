@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Mapping, Optional, Union
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import validate_app_id, validate_steam_id
+from steamcommunitykit.utils import validate_app_id, validate_steam_id, validate_uint32
 
 
 class UserStatsService:
@@ -86,5 +87,34 @@ class UserStatsService:
             "GET",
             f"{self.base_url}/GetGlobalStatsForGame/v1/",
             params=params,
+            require_api_key=True,
+        )
+
+    def set_user_stats_for_game(
+        self,
+        steam_id,
+        app_id,
+        stats: Mapping[str, Union[int, bool, str]],
+    ) -> dict:
+        if not stats:
+            raise SteamValidationError("stats cannot be empty.")
+        data = {
+            "steamid": validate_steam_id(steam_id),
+            "appid": validate_app_id(app_id),
+            "count": len(stats),
+        }
+        for index, (name, value) in enumerate(stats.items()):
+            if not str(name).strip():
+                raise SteamValidationError("stat names must be non-empty strings.")
+            data["name[{0}]".format(index)] = str(name).strip()
+            data["value[{0}]".format(index)] = validate_uint32(
+                int(value),
+                "value[{0}]".format(index),
+                allow_zero=True,
+            )
+        return self.transport.request(
+            "POST",
+            f"{self.base_url}/SetUserStatsForGame/v1/",
+            data=data,
             require_api_key=True,
         )

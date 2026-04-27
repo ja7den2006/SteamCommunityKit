@@ -11,6 +11,7 @@ from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult
 from steamcommunitykit.services import (
     AppsService,
     AuthenticationService,
+    CommunityAPIService,
     CommunityService,
     GroupsService,
     NewsService,
@@ -54,6 +55,7 @@ class SteamClient:
         self.news = NewsService(self._transport)
         self.user_stats = UserStatsService(self._transport)
         self.auth = AuthenticationService(self._transport)
+        self.community_api = CommunityAPIService(self._transport)
         self.community = CommunityService(self._transport)
         self.groups = GroupsService(self._transport)
         self.store = StoreService(self._transport)

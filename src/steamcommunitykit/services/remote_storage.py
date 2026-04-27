@@ -34,8 +34,11 @@ class RemoteStorageService:
             data=data,
         )
 
-    def get_ugc_file_details(self, ugc_id, steam_id=None) -> dict:
-        params = {"ugcid": validate_uint64(ugc_id, "ugc_id")}
+    def get_ugc_file_details(self, ugc_id, app_id, steam_id=None) -> dict:
+        params = {
+            "ugcid": validate_uint64(ugc_id, "ugc_id"),
+            "appid": validate_app_id(app_id),
+        }
         if steam_id is not None:
             params["steamid"] = validate_steam_id(steam_id)
         return self.transport.request(
@@ -79,6 +82,19 @@ class RemoteStorageService:
                 "steamid": validate_steam_id(steam_id),
                 "appid": validate_app_id(app_id),
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
+            },
+            require_api_key=True,
+        )
+
+    def set_ugc_used_by_gc(self, steam_id, ugc_id, app_id, used: bool) -> dict:
+        return self.transport.request(
+            "POST",
+            f"{self.base_url}/SetUGCUsedByGC/v1/",
+            data={
+                "steamid": validate_steam_id(steam_id),
+                "ugcid": validate_uint64(ugc_id, "ugc_id"),
+                "appid": validate_app_id(app_id),
+                "used": int(used),
             },
             require_api_key=True,
         )
