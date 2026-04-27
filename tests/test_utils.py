@@ -7,8 +7,10 @@ from steamcommunitykit.utils import (
     load_api_key_from_json,
     normalize_app_ids,
     normalize_steam_ids,
+    normalize_uint64_ids,
     validate_app_id,
     validate_steam_id,
+    validate_uint64,
 )
 
 
@@ -43,3 +45,8 @@ def test_load_api_key_from_json_reads_expected_key(tmp_path: Path) -> None:
 def test_normalize_app_ids_handles_single_and_list_values() -> None:
     assert normalize_app_ids(440) == [440]
     assert normalize_app_ids(["440", 570]) == [440, 570]
+
+
+def test_validate_uint64_and_normalize_uint64_ids() -> None:
+    assert validate_uint64("123456789", "published_file_id") == "123456789"
+    assert normalize_uint64_ids([123, "456"], "published_file_id") == ["123", "456"]

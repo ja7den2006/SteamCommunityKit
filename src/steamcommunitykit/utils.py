@@ -32,6 +32,15 @@ def validate_app_id(app_id: Union[str, int], field_name: str = "app_id") -> int:
     return value
 
 
+def validate_uint64(value: Union[str, int], field_name: str) -> str:
+    normalized = str(value).strip()
+    if not normalized.isdigit():
+        raise SteamValidationError(f"{field_name} must be a numeric string or integer.")
+    if int(normalized) <= 0:
+        raise SteamValidationError(f"{field_name} must be greater than zero.")
+    return normalized
+
+
 def normalize_steam_ids(
     steam_ids: Union[str, int, Iterable[Union[str, int]]]
 ) -> List[str]:
@@ -49,6 +58,18 @@ def normalize_app_ids(app_ids: Union[str, int, Iterable[Union[str, int]]]) -> Li
     normalized = [validate_app_id(item) for item in app_ids]
     if not normalized:
         raise SteamValidationError("app_ids cannot be empty.")
+    return normalized
+
+
+def normalize_uint64_ids(
+    values: Union[str, int, Iterable[Union[str, int]]],
+    field_name: str,
+) -> List[str]:
+    if isinstance(values, (str, int)):
+        return [validate_uint64(values, field_name)]
+    normalized = [validate_uint64(value, field_name) for value in values]
+    if not normalized:
+        raise SteamValidationError("{0} cannot be empty.".format(field_name))
     return normalized
 
 

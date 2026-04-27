@@ -15,6 +15,9 @@ from steamcommunitykit.services import (
     GroupsService,
     NewsService,
     PlayersService,
+    PublishedFilesService,
+    RemoteStorageService,
+    StoreService,
     UserStatsService,
     UsersService,
 )
@@ -48,6 +51,9 @@ class SteamClient:
         self.auth = AuthenticationService(self._transport)
         self.community = CommunityService(self._transport)
         self.groups = GroupsService(self._transport)
+        self.store = StoreService(self._transport)
+        self.published_files = PublishedFilesService(self._transport)
+        self.remote_storage = RemoteStorageService(self._transport)
 
     @property
     def api_key(self) -> Optional[str]:

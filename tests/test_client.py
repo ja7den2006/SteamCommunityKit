@@ -83,6 +83,9 @@ def test_client_exposes_expected_services() -> None:
     assert client.users is not None
     assert client.players is not None
     assert client.apps is not None
+    assert client.store is not None
+    assert client.published_files is not None
+    assert client.remote_storage is not None
     client.close()
 
 
@@ -171,4 +174,75 @@ def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
     with pytest.raises(SteamValidationError):
         client.users.get_app_price_info("76561197960435530", list(range(1, 102)))
 
+    client.close()
+
+
+def test_store_service_uses_partner_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"items": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.store.get_app_list(if_modified_since=1234567890, include_games=True)
+
+    call = session.calls[0]
+    assert call["url"] == "https://partner.steam-api.com/IStoreService/GetAppList/v1/"
+    assert call["params"]["if_modified_since"] == 1234567890
+    assert call["params"]["include_games"] == 1
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_published_files_query_uses_public_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"total": 0}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.published_files.query_files(query_type=0, cursor="*", app_id=570, total_only=True)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["totalonly"] == 1
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_published_files_partner_write_uses_partner_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.published_files.set_developer_metadata("123456", 570, "hello")
+
+    call = session.calls[0]
+    assert call["url"] == "https://partner.steam-api.com/IPublishedFileService/SetDeveloperMetadata/v1/"
+    assert call["data"]["publishedfileid"] == "123456"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["metadata"] == "hello"
+    client.close()
+
+
+def test_remote_storage_public_details_use_public_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"publishedfiledetails": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.remote_storage.get_published_file_details(["123456", "789012"])
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
+    assert call["data"]["itemcount"] == 2
+    assert call["data"]["publishedfileids[0]"] == "123456"
+    assert call["data"]["publishedfileids[1]"] == "789012"
+    client.close()
+
+
+def test_remote_storage_subscribe_uses_partner_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"result": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.remote_storage.subscribe_published_file("76561197960435530", 570, "123456")
+
+    call = session.calls[0]
+    assert call["url"] == "https://partner.steam-api.com/ISteamRemoteStorage/SubscribePublishedFile/v1/"
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["publishedfileid"] == "123456"
+    assert call["params"]["key"] == "test"
     client.close()
