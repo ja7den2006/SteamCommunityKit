@@ -5,6 +5,7 @@ import pytest
 from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.utils import (
     load_api_key_from_json,
+    normalize_app_ids,
     normalize_steam_ids,
     validate_app_id,
     validate_steam_id,
@@ -37,3 +38,8 @@ def test_load_api_key_from_json_reads_expected_key(tmp_path: Path) -> None:
     file_path = tmp_path / "api.json"
     file_path.write_text('{"API_KEY":"abc123"}', encoding="utf-8")
     assert load_api_key_from_json(file_path) == "abc123"
+
+
+def test_normalize_app_ids_handles_single_and_list_values() -> None:
+    assert normalize_app_ids(440) == [440]
+    assert normalize_app_ids(["440", 570]) == [440, 570]

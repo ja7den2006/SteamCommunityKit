@@ -43,6 +43,15 @@ def normalize_steam_ids(
     return normalized
 
 
+def normalize_app_ids(app_ids: Union[str, int, Iterable[Union[str, int]]]) -> List[int]:
+    if isinstance(app_ids, (str, int)):
+        return [validate_app_id(app_ids)]
+    normalized = [validate_app_id(item) for item in app_ids]
+    if not normalized:
+        raise SteamValidationError("app_ids cannot be empty.")
+    return normalized
+
+
 def load_api_key_from_json(path: Union[str, Path]) -> str:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     try:

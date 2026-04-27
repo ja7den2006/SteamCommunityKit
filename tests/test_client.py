@@ -1,6 +1,12 @@
 import pytest
 
-from steamcommunitykit import CommunityCredentials, SteamAuthenticationError, SteamClient
+from steamcommunitykit import (
+    CommunityCredentials,
+    SteamAuthenticationError,
+    SteamClient,
+    SteamRateLimitError,
+    SteamValidationError,
+)
 from steamcommunitykit.http import SteamHTTPTransport
 
 
@@ -39,6 +45,20 @@ class RecordingSession:
     def request(self, **kwargs):
         self.calls.append(kwargs)
         return self._response
+
+    def close(self):
+        return None
+
+
+class SequenceSession:
+    def __init__(self, responses):
+        self.headers = {}
+        self._responses = list(responses)
+        self.calls = []
+
+    def request(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._responses.pop(0)
 
     def close(self):
         return None
@@ -113,4 +133,42 @@ def test_news_service_authed_method_uses_partner_base_url() -> None:
     assert call["params"]["appid"] == 440
     assert call["params"]["count"] == 1
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_transport_retries_rate_limited_response_until_success() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(status_code=429, json_data={"error": "slow down"}, headers={"Retry-After": "0"}),
+            DummyResponse(json_data={"response": {"ok": True}}, text="{}"),
+        ]
+    )
+    transport = SteamHTTPTransport(api_key="test", session=session, backoff_factor=0, max_retries=1)
+
+    result = transport.request("GET", "https://example.com", require_api_key=True)
+
+    assert result == {"ok": True}
+    assert len(session.calls) == 2
+
+
+def test_transport_raises_rate_limit_error_after_exhausting_retries() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(status_code=429, json_data={"error": "slow down"}, headers={"Retry-After": "0"}),
+            DummyResponse(status_code=429, json_data={"error": "slow down"}, headers={"Retry-After": "0"}),
+        ]
+    )
+    transport = SteamHTTPTransport(api_key="test", session=session, backoff_factor=0, max_retries=1)
+
+    with pytest.raises(SteamRateLimitError):
+        transport.request("GET", "https://example.com", require_api_key=True)
+
+
+def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
+    session = RecordingSession(DummyResponse(json_data={"price_info": {}}))
+    client = SteamClient(api_key="test", session=session)
+
+    with pytest.raises(SteamValidationError):
+        client.users.get_app_price_info("76561197960435530", list(range(1, 102)))
+
     client.close()
