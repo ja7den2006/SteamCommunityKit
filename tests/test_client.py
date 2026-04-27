@@ -2,6 +2,7 @@ import pytest
 
 from steamcommunitykit import (
     CommunityCredentials,
+    CredentialLoginResult,
     SteamAuthenticationError,
     SteamClient,
     SteamRateLimitError,
@@ -48,6 +49,10 @@ class RecordingSession:
 
     def close(self):
         return None
+
+    def post(self, url, timeout=None):
+        self.calls.append({"method": "POST", "url": url, "timeout": timeout})
+        return self._response
 
 
 class SequenceSession:
@@ -245,4 +250,64 @@ def test_remote_storage_subscribe_uses_api_base_url() -> None:
     assert call["data"]["appid"] == 570
     assert call["data"]["publishedfileid"] == "123456"
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_auth_community_credentials_from_login_uses_cookie_response() -> None:
+    response = DummyResponse(json_data={"response": {"ok": True}})
+    response.cookies = {"sessionid": "session123", "steamLoginSecure": "securecookie123"}
+    session = RecordingSession(response)
+    client = SteamClient(api_key="test", session=session)
+
+    login_result = CredentialLoginResult(
+        steam_id="76561197960435530",
+        account_name="tester",
+        client_id=1,
+        request_id="req",
+        access_token="access123",
+        refresh_token="refresh123",
+    )
+
+    original_set_cookie = client.auth.set_community_login_cookie
+
+    def fake_set_cookie(**kwargs):
+        return response
+
+    client.auth.set_community_login_cookie = fake_set_cookie
+    credentials = client.auth.community_credentials_from_login(login_result)
+    client.auth.set_community_login_cookie = original_set_cookie
+
+    assert credentials.session_id == "session123"
+    assert credentials.steam_login_secure == "securecookie123"
+    assert credentials.access_token == "access123"
+    client.close()
+
+
+def test_group_availability_uses_form_data_and_browser_headers() -> None:
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<response><fieldId><![CDATA[groupName]]></fieldId>'
+        '<bResults><![CDATA[1]]></bResults>'
+        '<sResults><![CDATA[available]]></sResults></response>'
+    )
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    result = client.groups.check_name_availability("examplegroupname")
+
+    call = session.calls[0]
+    assert result.available is True
+    assert call["data"]["xml"] == "1"
+    assert call["data"]["type"] == "groupName"
+    assert call["headers"]["Content-Type"] == "application/x-www-form-urlencoded; charset=UTF-8"
+    assert call["headers"]["Origin"] == "https://steamcommunity.com"
+    assert call["headers"]["Referer"] == "https://steamcommunity.com/actions/GroupCreate"
+    assert call["json"] is None
     client.close()

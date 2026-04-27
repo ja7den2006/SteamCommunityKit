@@ -13,6 +13,7 @@ from steamcommunitykit.exceptions import (
 from steamcommunitykit.models import (
     AvailabilityResult,
     CommunityCredentials,
+    CredentialLoginResult,
     CreatedGroup,
     QRAuthSession,
 )
@@ -20,6 +21,7 @@ from steamcommunitykit.models import (
 __all__ = [
     "AvailabilityResult",
     "CommunityCredentials",
+    "CredentialLoginResult",
     "CreatedGroup",
     "QRAuthSession",
     "SteamAPIError",

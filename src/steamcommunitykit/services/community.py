@@ -20,6 +20,15 @@ class CommunityService:
             "sessionid": credentials.session_id,
         }
 
+    @staticmethod
+    def _headers(referer: str) -> Dict[str, str]:
+        return {
+            "Accept": "application/json, text/plain, */*",
+            "Origin": COMMUNITY_BASE_URL,
+            "Referer": referer,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
     def set_profile_privacy(
         self,
         steam_id,
@@ -51,6 +60,9 @@ class CommunityService:
                 "Privacy": privacy_payload,
                 "eCommentPermission": str(comment_permission),
             },
+            headers=self._headers(
+                f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/settings"
+            ),
             cookies=self._community_cookies(),
         )
         return response
@@ -67,6 +79,7 @@ class CommunityService:
                 "hide_profile_awards": 0,
                 "json": 1,
             },
+            headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/"),
             cookies=self._community_cookies(),
         )
 
@@ -88,6 +101,7 @@ class CommunityService:
                 },
                 files={"avatar": (path.name, handle, mime_type or "application/octet-stream")},
                 cookies=self._community_cookies(),
+                headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/avatar"),
                 timeout=self.transport.timeout,
             )
         if response.status_code >= 400:

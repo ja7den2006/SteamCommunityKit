@@ -8,7 +8,7 @@ import rsa
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL, WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.models import QRAuthSession
+from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult, QRAuthSession
 from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
 
 
@@ -137,6 +137,56 @@ class AuthenticationService:
                 "steamID": validate_steam_id(steam_id),
             },
             expected="raw",
+        )
+
+    def create_session_id(self) -> str:
+        response = self.transport.session.post(
+            COMMUNITY_BASE_URL,
+            timeout=self.transport.timeout,
+        )
+        session_id = response.cookies.get("sessionid")
+        if not session_id:
+            raise RuntimeError("Steam did not return a sessionid cookie.")
+        return session_id
+
+    def login_with_credentials(
+        self,
+        account_name: str,
+        password: str,
+        *,
+        persistence: bool = True,
+    ) -> CredentialLoginResult:
+        started = self.begin_auth_session_via_credentials(
+            account_name,
+            password,
+            persistence=persistence,
+        )
+        polled = self.poll_auth_session_status(int(started["client_id"]), started["request_id"])
+        return CredentialLoginResult(
+            steam_id=str(started["steamid"]),
+            account_name=str(polled.get("account_name") or ensure_not_blank(account_name, "account_name")),
+            client_id=int(started["client_id"]),
+            request_id=str(started["request_id"]),
+            access_token=str(polled["access_token"]),
+            refresh_token=str(polled["refresh_token"]),
+            had_remote_interaction=bool(polled.get("had_remote_interaction", False)),
+        )
+
+    def community_credentials_from_login(self, login_result: CredentialLoginResult) -> CommunityCredentials:
+        session_id = self.create_session_id()
+        response = self.set_community_login_cookie(
+            refresh_token=login_result.refresh_token,
+            session_id=session_id,
+            steam_id=login_result.steam_id,
+        )
+        steam_login_secure = response.cookies.get("steamLoginSecure")
+        if not steam_login_secure:
+            raise RuntimeError("Steam did not return a steamLoginSecure cookie.")
+        return CommunityCredentials(
+            steam_id=login_result.steam_id,
+            session_id=session_id,
+            access_token=login_result.access_token,
+            steam_login_secure=steam_login_secure,
         )
 
     @staticmethod

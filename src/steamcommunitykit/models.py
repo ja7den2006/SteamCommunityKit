@@ -35,6 +35,17 @@ class CommunityCredentials:
 
 
 @dataclass
+class CredentialLoginResult:
+    steam_id: str
+    account_name: str
+    client_id: int
+    request_id: str
+    access_token: str
+    refresh_token: str
+    had_remote_interaction: bool = False
+
+
+@dataclass
 class AvailabilityResult:
     field_id: Optional[str]
     available: bool

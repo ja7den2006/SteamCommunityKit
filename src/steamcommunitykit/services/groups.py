@@ -22,11 +22,22 @@ class GroupsService:
             "sessionid": credentials.session_id,
         }
 
+    @staticmethod
+    def _headers(referer: str) -> Dict[str, str]:
+        return {
+            "Accept": "*/*",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": COMMUNITY_BASE_URL,
+            "Referer": referer,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
     def _availability_check(self, check_type: str, value: str) -> AvailabilityResult:
         response_text = self.transport.request(
             "POST",
             f"{COMMUNITY_BASE_URL}/actions/AvailabilityCheck",
             data={"xml": "1", "type": check_type, "value": ensure_not_blank(value, "value")},
+            headers=self._headers(f"{COMMUNITY_BASE_URL}/actions/GroupCreate"),
             cookies=self._community_cookies(),
             expected="text",
         )
@@ -131,6 +142,7 @@ class GroupsService:
             "POST",
             f"{COMMUNITY_BASE_URL}/actions/GroupCreate",
             data=payload,
+            headers=self._headers(f"{COMMUNITY_BASE_URL}/actions/GroupCreate"),
             cookies=self._community_cookies(),
         )
 
@@ -138,6 +150,7 @@ class GroupsService:
             "POST",
             f"{COMMUNITY_BASE_URL}/actions/GroupCreate",
             data=payload,
+            headers=self._headers(f"{COMMUNITY_BASE_URL}/actions/GroupCreate"),
             cookies=self._community_cookies(),
         )
 
