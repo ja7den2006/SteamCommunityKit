@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from steamcommunitykit.constants import PARTNER_API_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import normalize_uint64_ids, validate_app_id, validate_steam_id, validate_uint64
 
@@ -11,7 +11,6 @@ class RemoteStorageService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/ISteamRemoteStorage"
-        self.partner_base_url = f"{PARTNER_API_BASE_URL}/ISteamRemoteStorage"
 
     def get_collection_details(self, published_file_ids) -> dict:
         normalized_ids = normalize_uint64_ids(published_file_ids, "published_file_id")
@@ -55,7 +54,7 @@ class RemoteStorageService:
             data["listtype"] = int(list_type)
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/EnumerateUserSubscribedFiles/v1/",
+            f"{self.base_url}/EnumerateUserSubscribedFiles/v1/",
             data=data,
             require_api_key=True,
         )
@@ -63,7 +62,7 @@ class RemoteStorageService:
     def subscribe_published_file(self, steam_id, app_id, published_file_id) -> dict:
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/SubscribePublishedFile/v1/",
+            f"{self.base_url}/SubscribePublishedFile/v1/",
             data={
                 "steamid": validate_steam_id(steam_id),
                 "appid": validate_app_id(app_id),
@@ -75,7 +74,7 @@ class RemoteStorageService:
     def unsubscribe_published_file(self, steam_id, app_id, published_file_id) -> dict:
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/UnsubscribePublishedFile/v1/",
+            f"{self.base_url}/UnsubscribePublishedFile/v1/",
             data={
                 "steamid": validate_steam_id(steam_id),
                 "appid": validate_app_id(app_id),

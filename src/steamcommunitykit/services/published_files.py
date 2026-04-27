@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from steamcommunitykit.constants import PARTNER_API_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_steam_id, validate_uint64
 
@@ -11,7 +11,6 @@ class PublishedFilesService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/IPublishedFileService"
-        self.partner_base_url = f"{PARTNER_API_BASE_URL}/IPublishedFileService"
 
     def delete(self, published_file_id, app_id) -> dict:
         return self.transport.request(
@@ -117,7 +116,7 @@ class PublishedFilesService:
     def set_developer_metadata(self, published_file_id, app_id, metadata: str) -> dict:
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/SetDeveloperMetadata/v1/",
+            f"{self.base_url}/SetDeveloperMetadata/v1/",
             data={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
@@ -142,7 +141,7 @@ class PublishedFilesService:
             data["reason"] = reason
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/UpdateAppUGCBan/v1/",
+            f"{self.base_url}/UpdateAppUGCBan/v1/",
             data=data,
             require_api_key=True,
         )
@@ -156,7 +155,7 @@ class PublishedFilesService:
     ) -> dict:
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/UpdateBanStatus/v1/",
+            f"{self.base_url}/UpdateBanStatus/v1/",
             data={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
@@ -169,7 +168,7 @@ class PublishedFilesService:
     def update_incompatible_status(self, published_file_id, app_id, incompatible: bool) -> dict:
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/UpdateIncompatibleStatus/v1/",
+            f"{self.base_url}/UpdateIncompatibleStatus/v1/",
             data={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
@@ -196,7 +195,7 @@ class PublishedFilesService:
             data["remove_tags"] = remove_tags
         return self.transport.request(
             "POST",
-            f"{self.partner_base_url}/UpdateTags/v1/",
+            f"{self.base_url}/UpdateTags/v1/",
             data=data,
             require_api_key=True,
         )

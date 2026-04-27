@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from steamcommunitykit.constants import PARTNER_API_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_app_id
 
@@ -11,7 +11,6 @@ class AppsService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/ISteamApps"
-        self.partner_base_url = f"{PARTNER_API_BASE_URL}/ISteamApps"
 
     def get_app_list(self) -> dict:
         return self.transport.request(
@@ -39,7 +38,7 @@ class AppsService:
             params["type_filter"] = ensure_not_blank(type_filter, "type_filter")
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetPartnerAppListForWebAPIKey/v2/",
+            f"{self.base_url}/GetPartnerAppListForWebAPIKey/v2/",
             params=params,
             require_api_key=True,
         )
@@ -50,7 +49,7 @@ class AppsService:
             params["limit"] = int(limit)
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetServerList/v1/",
+            f"{self.base_url}/GetServerList/v1/",
             params=params,
             require_api_key=True,
         )
@@ -61,7 +60,7 @@ class AppsService:
             params["count"] = int(count)
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetAppBuilds/v1/",
+            f"{self.base_url}/GetAppBuilds/v1/",
             params=params,
             require_api_key=True,
         )
@@ -69,7 +68,7 @@ class AppsService:
     def get_app_depot_versions(self, app_id) -> dict:
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetAppDepotVersions/v1/",
+            f"{self.base_url}/GetAppDepotVersions/v1/",
             params={"appid": validate_app_id(app_id)},
             require_api_key=True,
         )
@@ -77,7 +76,7 @@ class AppsService:
     def get_players_banned(self, app_id) -> dict:
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetPlayersBanned/v1/",
+            f"{self.base_url}/GetPlayersBanned/v1/",
             params={"appid": validate_app_id(app_id)},
             require_api_key=True,
         )

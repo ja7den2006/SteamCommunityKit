@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-from steamcommunitykit.constants import PARTNER_API_BASE_URL
+from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 
 
 class StoreService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
-        self.base_url = f"{PARTNER_API_BASE_URL}/IStoreService"
+        self.base_url = f"{WEB_API_BASE_URL}/IStoreService"
 
     def get_app_list(
         self,

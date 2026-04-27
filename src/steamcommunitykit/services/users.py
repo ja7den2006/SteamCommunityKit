@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from steamcommunitykit.constants import PARTNER_API_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import (
@@ -16,7 +16,6 @@ class UsersService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/ISteamUser"
-        self.partner_base_url = f"{PARTNER_API_BASE_URL}/ISteamUser"
 
     def resolve_vanity_url(self, vanity_url: str, url_type=None) -> dict:
         params = {"vanityurl": ensure_not_blank(vanity_url, "vanity_url")}
@@ -74,7 +73,7 @@ class UsersService:
     def check_app_ownership(self, steam_id, app_id) -> dict:
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/CheckAppOwnership/v4/",
+            f"{self.base_url}/CheckAppOwnership/v4/",
             params={
                 "steamid": validate_steam_id(steam_id),
                 "appid": validate_app_id(app_id),
@@ -88,7 +87,7 @@ class UsersService:
             raise SteamValidationError("app_ids cannot contain more than 100 app ids.")
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetAppPriceInfo/v1/",
+            f"{self.base_url}/GetAppPriceInfo/v1/",
             params={
                 "steamid": validate_steam_id(steam_id),
                 "appids": ",".join(normalized_ids),
@@ -99,7 +98,7 @@ class UsersService:
     def get_deleted_steam_ids(self, rowversion) -> dict:
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetDeletedSteamIDs/v1/",
+            f"{self.base_url}/GetDeletedSteamIDs/v1/",
             params={"rowversion": int(rowversion)},
             require_api_key=True,
         )
@@ -107,7 +106,7 @@ class UsersService:
     def get_publisher_app_ownership(self, steam_id) -> dict:
         return self.transport.request(
             "GET",
-            f"{self.partner_base_url}/GetPublisherAppOwnership/v4/",
+            f"{self.base_url}/GetPublisherAppOwnership/v4/",
             params={"steamid": validate_steam_id(steam_id)},
             require_api_key=True,
         )

@@ -98,41 +98,41 @@ def test_community_credentials_build_cookie_from_access_token() -> None:
     assert credentials.steam_login_secure_value == "76561197960435530%7C%7Ctoken123"
 
 
-def test_users_service_publisher_endpoint_uses_partner_base_url() -> None:
+def test_users_service_publisher_endpoint_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"ownsapp": True}))
     client = SteamClient(api_key="test", session=session)
 
     client.users.check_app_ownership("76561197960435530", 440)
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/ISteamUser/CheckAppOwnership/v4/"
+    assert call["url"] == "https://api.steampowered.com/ISteamUser/CheckAppOwnership/v4/"
     assert call["params"]["steamid"] == "76561197960435530"
     assert call["params"]["appid"] == 440
     assert call["params"]["key"] == "test"
     client.close()
 
 
-def test_apps_service_partner_list_method_uses_partner_base_url() -> None:
+def test_apps_service_partner_list_method_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"applist": {}}))
     client = SteamClient(api_key="test", session=session)
 
     client.apps.get_partner_app_list_for_web_api_key("game,tool")
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/ISteamApps/GetPartnerAppListForWebAPIKey/v2/"
+    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetPartnerAppListForWebAPIKey/v2/"
     assert call["params"]["type_filter"] == "game,tool"
     assert call["params"]["key"] == "test"
     client.close()
 
 
-def test_news_service_authed_method_uses_partner_base_url() -> None:
+def test_news_service_authed_method_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"appnews": {}}))
     client = SteamClient(api_key="test", session=session)
 
     client.news.get_news_for_app_authed(440, count=1)
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/ISteamNews/GetNewsForAppAuthed/v2/"
+    assert call["url"] == "https://api.steampowered.com/ISteamNews/GetNewsForAppAuthed/v2/"
     assert call["params"]["appid"] == 440
     assert call["params"]["count"] == 1
     assert call["params"]["key"] == "test"
@@ -177,14 +177,14 @@ def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
     client.close()
 
 
-def test_store_service_uses_partner_base_url() -> None:
+def test_store_service_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"items": []}}))
     client = SteamClient(api_key="test", session=session)
 
     client.store.get_app_list(if_modified_since=1234567890, include_games=True)
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/IStoreService/GetAppList/v1/"
+    assert call["url"] == "https://api.steampowered.com/IStoreService/GetAppList/v1/"
     assert call["params"]["if_modified_since"] == 1234567890
     assert call["params"]["include_games"] == 1
     assert call["params"]["key"] == "test"
@@ -205,14 +205,14 @@ def test_published_files_query_uses_public_base_url() -> None:
     client.close()
 
 
-def test_published_files_partner_write_uses_partner_base_url() -> None:
+def test_published_files_write_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"success": 1}))
     client = SteamClient(api_key="test", session=session)
 
     client.published_files.set_developer_metadata("123456", 570, "hello")
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/IPublishedFileService/SetDeveloperMetadata/v1/"
+    assert call["url"] == "https://api.steampowered.com/IPublishedFileService/SetDeveloperMetadata/v1/"
     assert call["data"]["publishedfileid"] == "123456"
     assert call["data"]["appid"] == 570
     assert call["data"]["metadata"] == "hello"
@@ -233,14 +233,14 @@ def test_remote_storage_public_details_use_public_base_url() -> None:
     client.close()
 
 
-def test_remote_storage_subscribe_uses_partner_base_url() -> None:
+def test_remote_storage_subscribe_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"result": 1}}))
     client = SteamClient(api_key="test", session=session)
 
     client.remote_storage.subscribe_published_file("76561197960435530", 570, "123456")
 
     call = session.calls[0]
-    assert call["url"] == "https://partner.steam-api.com/ISteamRemoteStorage/SubscribePublishedFile/v1/"
+    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/SubscribePublishedFile/v1/"
     assert call["data"]["steamid"] == "76561197960435530"
     assert call["data"]["appid"] == 570
     assert call["data"]["publishedfileid"] == "123456"
