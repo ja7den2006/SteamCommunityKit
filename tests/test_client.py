@@ -97,6 +97,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.webapi_util is not None
     assert client.workshop is not None
     assert client.community_api is not None
+    assert client.cloud is not None
     assert client.leaderboards is not None
     client.close()
 
@@ -439,6 +440,78 @@ def test_community_api_report_abuse_uses_api_base_url() -> None:
     assert call["data"]["description"] == "Test report"
     assert call["data"]["gid"] == "1234567890"
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_cloud_enumerate_user_files_uses_access_token_params() -> None:
+    session = RecordingSession(DummyResponse(json_data={"files": [], "total_files": 0}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cloud.enumerate_user_files(
+        "token-123",
+        570,
+        extended_details=True,
+        count=100,
+        start_index=0,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICloudService/EnumerateUserFiles/v1/"
+    assert call["params"]["access_token"] == "token-123"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["extended_details"] == 1
+    assert call["params"]["count"] == 100
+    assert call["params"]["start_index"] == 0
+    assert "key" not in call["params"]
+    client.close()
+
+
+def test_cloud_begin_app_upload_batch_uses_input_json_form_body() -> None:
+    session = RecordingSession(DummyResponse(json_data={"batch_id": "123"}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cloud.begin_app_upload_batch(
+        "token-123",
+        570,
+        "Steam Deck",
+        files_to_upload=["save1.sav"],
+        files_to_delete=["save_old.sav"],
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICloudService/BeginAppUploadBatch/v1/"
+    assert call["data"]["access_token"] == "token-123"
+    assert '"appid":570' in call["data"]["input_json"]
+    assert '"machine_name":"Steam Deck"' in call["data"]["input_json"]
+    assert '"files_to_upload":["save1.sav"]' in call["data"]["input_json"]
+    assert '"files_to_delete":["save_old.sav"]' in call["data"]["input_json"]
+    client.close()
+
+
+def test_cloud_begin_http_upload_uses_input_json_form_body() -> None:
+    session = RecordingSession(DummyResponse(json_data={"url_host": "example.com"}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cloud.begin_http_upload(
+        "token-123",
+        570,
+        2048,
+        "save1.sav",
+        "0123456789abcdef0123456789abcdef01234567",
+        "123456",
+        platforms_to_sync=["all", "windows"],
+        is_public=False,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICloudService/BeginHTTPUpload/v1/"
+    assert call["data"]["access_token"] == "token-123"
+    assert '"file_size":2048' in call["data"]["input_json"]
+    assert '"filename":"save1.sav"' in call["data"]["input_json"]
+    assert '"file_sha":"0123456789abcdef0123456789abcdef01234567"' in call["data"]["input_json"]
+    assert '"upload_batch_id":"123456"' in call["data"]["input_json"]
+    assert '"platforms_to_sync":["all","windows"]' in call["data"]["input_json"]
+    assert '"is_public":false' in call["data"]["input_json"]
     client.close()
 
 
