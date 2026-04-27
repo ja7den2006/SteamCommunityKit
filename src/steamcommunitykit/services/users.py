@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from steamcommunitykit.constants import WEB_API_BASE_URL
+from steamcommunitykit.constants import PARTNER_API_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, normalize_steam_ids, validate_steam_id
+from steamcommunitykit.utils import ensure_not_blank, normalize_steam_ids, validate_app_id, validate_steam_id
 
 
 class UsersService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/ISteamUser"
+        self.partner_base_url = f"{PARTNER_API_BASE_URL}/ISteamUser"
 
     def resolve_vanity_url(self, vanity_url: str, url_type=None) -> dict:
         params = {"vanityurl": ensure_not_blank(vanity_url, "vanity_url")}
@@ -46,7 +48,7 @@ class UsersService:
             require_api_key=True,
         )
 
-    def get_player_bans(self, steam_ids) -> list[dict]:
+    def get_player_bans(self, steam_ids) -> list:
         response = self.transport.request(
             "GET",
             f"{self.base_url}/GetPlayerBans/v1/",
@@ -59,6 +61,47 @@ class UsersService:
         return self.transport.request(
             "GET",
             f"{self.base_url}/GetUserGroupList/v1/",
+            params={"steamid": validate_steam_id(steam_id)},
+            require_api_key=True,
+        )
+
+    def check_app_ownership(self, steam_id, app_id) -> dict:
+        return self.transport.request(
+            "GET",
+            f"{self.partner_base_url}/CheckAppOwnership/v4/",
+            params={
+                "steamid": validate_steam_id(steam_id),
+                "appid": validate_app_id(app_id),
+            },
+            require_api_key=True,
+        )
+
+    def get_app_price_info(self, steam_id, app_ids) -> dict:
+        normalized_ids = [str(validate_app_id(app_id)) for app_id in app_ids]
+        if not normalized_ids:
+            raise SteamValidationError("app_ids cannot be empty.")
+        return self.transport.request(
+            "GET",
+            f"{self.partner_base_url}/GetAppPriceInfo/v1/",
+            params={
+                "steamid": validate_steam_id(steam_id),
+                "appids": ",".join(normalized_ids[:100]),
+            },
+            require_api_key=True,
+        )
+
+    def get_deleted_steam_ids(self, rowversion) -> dict:
+        return self.transport.request(
+            "GET",
+            f"{self.partner_base_url}/GetDeletedSteamIDs/v1/",
+            params={"rowversion": int(rowversion)},
+            require_api_key=True,
+        )
+
+    def get_publisher_app_ownership(self, steam_id) -> dict:
+        return self.transport.request(
+            "GET",
+            f"{self.partner_base_url}/GetPublisherAppOwnership/v4/",
             params={"steamid": validate_steam_id(steam_id)},
             require_api_key=True,
         )
