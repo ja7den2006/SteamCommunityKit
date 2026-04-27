@@ -3,6 +3,7 @@ from steamcommunitykit.services.auth import AuthenticationService
 from steamcommunitykit.services.community_api import CommunityAPIService
 from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.groups import GroupsService
+from steamcommunitykit.services.leaderboards import LeaderboardsService
 from steamcommunitykit.services.news import NewsService
 from steamcommunitykit.services.players import PlayersService
 from steamcommunitykit.services.published_files import PublishedFilesService
@@ -22,6 +23,7 @@ __all__ = [
     "CommunityAPIService",
     "CommunityService",
     "GroupsService",
+    "LeaderboardsService",
     "NewsService",
     "PlayersService",
     "PublishedFilesService",

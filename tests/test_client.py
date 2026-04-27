@@ -97,6 +97,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.webapi_util is not None
     assert client.workshop is not None
     assert client.community_api is not None
+    assert client.leaderboards is not None
     client.close()
 
 
@@ -437,6 +438,83 @@ def test_community_api_report_abuse_uses_api_base_url() -> None:
     assert call["data"]["contentType"] == 2
     assert call["data"]["description"] == "Test report"
     assert call["data"]["gid"] == "1234567890"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_leaderboards_find_or_create_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"leaderboardid": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.leaderboards.find_or_create_leaderboard(
+        570,
+        "BestTimes",
+        sort_method="Ascending",
+        display_type="TimeSeconds",
+        create_if_not_found=True,
+        only_trusted_writes=True,
+        only_friends_reads=False,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/FindOrCreateLeaderboard/v2/"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["name"] == "BestTimes"
+    assert call["data"]["sortmethod"] == "Ascending"
+    assert call["data"]["displaytype"] == "TimeSeconds"
+    assert call["data"]["createifnotfound"] == 1
+    assert call["data"]["onlytrustedwrites"] == 1
+    assert call["data"]["onlyfriendsreads"] == 0
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_leaderboards_get_entries_uses_signed_ranges() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"entries": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.leaderboards.get_leaderboard_entries(
+        570,
+        123,
+        -5,
+        5,
+        "RequestAroundUser",
+        steam_id="76561197960435530",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/GetLeaderboardEntries/v1/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["leaderboardid"] == 123
+    assert call["params"]["rangestart"] == -5
+    assert call["params"]["rangeend"] == 5
+    assert call["params"]["datarequest"] == "RequestAroundUser"
+    assert call["params"]["steamid"] == "76561197960435530"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_leaderboards_set_score_hex_encodes_details() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"score_changed": True}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.leaderboards.set_leaderboard_score(
+        570,
+        123,
+        "76561197960435530",
+        999,
+        "KeepBest",
+        details=b"\x00\xff",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/SetLeaderboardScore/v1/"
+    assert call["data"]["appid"] == 570
+    assert call["data"]["leaderboardid"] == 123
+    assert call["data"]["steamid"] == "76561197960435530"
+    assert call["data"]["score"] == 999
+    assert call["data"]["scoremethod"] == "KeepBest"
+    assert call["data"]["details"] == "00ff"
     assert call["params"]["key"] == "test"
     client.close()
 

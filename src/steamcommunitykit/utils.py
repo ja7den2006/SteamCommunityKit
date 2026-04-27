@@ -48,6 +48,20 @@ def validate_uint32(
     return normalized
 
 
+def validate_int32(value: Union[str, int], field_name: str) -> int:
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SteamValidationError(f"{field_name} must be an integer.") from exc
+    minimum = -(2 ** 31)
+    maximum = (2 ** 31) - 1
+    if normalized < minimum or normalized > maximum:
+        raise SteamValidationError(
+            f"{field_name} must fit in the signed 32-bit integer range."
+        )
+    return normalized
+
+
 def validate_uint64(value: Union[str, int], field_name: str) -> str:
     normalized = str(value).strip()
     if not normalized.isdigit():

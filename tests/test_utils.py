@@ -10,6 +10,7 @@ from steamcommunitykit.utils import (
     normalize_steam_ids,
     normalize_uint64_ids,
     validate_app_id,
+    validate_int32,
     validate_steam_id,
     validate_uint32,
     validate_uint64,
@@ -58,3 +59,8 @@ def test_validate_uint32_and_normalize_binary_value() -> None:
     assert validate_uint32("5", "count") == 5
     assert validate_uint32(0, "date_start", allow_zero=True) == 0
     assert normalize_binary_value(b"\xde\xad\xbe\xef", "session_key") == "deadbeef"
+
+
+def test_validate_int32_accepts_signed_range() -> None:
+    assert validate_int32(-10, "range_start") == -10
+    assert validate_int32(2147483647, "score") == 2147483647
