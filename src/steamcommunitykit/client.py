@@ -7,7 +7,7 @@ import requests
 
 from steamcommunitykit.constants import DEFAULT_TIMEOUT
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.models import CommunityCredentials
+from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult
 from steamcommunitykit.services import (
     AppsService,
     AuthenticationService,
@@ -64,6 +64,22 @@ class SteamClient:
 
     def set_community_credentials(self, credentials: CommunityCredentials) -> None:
         self._transport.community_credentials = credentials
+
+    def login_to_community(
+        self,
+        account_name: str,
+        password: str,
+        *,
+        persistence: bool = True,
+    ) -> CredentialLoginResult:
+        login_result = self.auth.login_with_credentials(
+            account_name,
+            password,
+            persistence=persistence,
+        )
+        credentials = self.auth.community_credentials_from_login(login_result)
+        self.set_community_credentials(credentials)
+        return login_result
 
     @classmethod
     def from_api_json(

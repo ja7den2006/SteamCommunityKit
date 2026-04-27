@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
-from steamcommunitykit.exceptions import SteamResponseError, SteamValidationError
+from steamcommunitykit.exceptions import SteamRateLimitError, SteamResponseError, SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import AvailabilityResult, CreatedGroup
 from steamcommunitykit.utils import ensure_not_blank
@@ -50,6 +50,12 @@ class GroupsService:
         field_id = root.findtext("fieldId")
         raw_available = root.findtext("bResults")
         message = (root.findtext("sResults") or root.findtext("results") or "").strip()
+        if "too many requests" in message.lower():
+            raise SteamRateLimitError(
+                message,
+                status_code=429,
+                payload={"field_id": field_id, "message": message},
+            )
         available = raw_available == "1"
         return AvailabilityResult(
             field_id=field_id,
