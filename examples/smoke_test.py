@@ -47,7 +47,7 @@ def build_client(args) -> SteamClient:
         return SteamClient.from_api_json(args.api_json)
     if args.api_key:
         return SteamClient(api_key=args.api_key)
-    raise ValueError("Provide either --api-json or --api-key.")
+    return SteamClient()
 
 
 def configure_community_session(client: SteamClient, args) -> bool:
@@ -564,8 +564,11 @@ def main() -> int:
     args = parse_args()
     client = build_client(args)
     try:
-        if not args.community_only:
+        if not args.community_only and client.api_key:
             run_public_suite(client, args)
+        elif not args.community_only:
+            print_header("Public / API Key Tests")
+            print("Skipped public API-key tests. Provide --api-key or --api-json to run them.")
 
         if not args.public_only:
             has_community_session = configure_community_session(client, args)

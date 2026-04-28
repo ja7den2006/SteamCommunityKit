@@ -147,6 +147,16 @@ def test_client_exposes_expected_services() -> None:
     client.close()
 
 
+def test_client_does_not_require_api_key_at_construction() -> None:
+    client = SteamClient()
+
+    assert client.api_key is None
+    assert client.community is not None
+    assert client.groups is not None
+
+    client.close()
+
+
 def test_community_credentials_build_cookie_from_access_token() -> None:
     credentials = CommunityCredentials(
         steam_id="76561197960435530",
