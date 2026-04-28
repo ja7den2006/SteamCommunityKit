@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Union
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from steamcommunitykit.exceptions import SteamValidationError
+
+
+STEAM_ID64_BASE = 76561197960265728
 
 
 def ensure_not_blank(value: str, field_name: str) -> str:
@@ -26,6 +29,16 @@ def validate_steam_id(steam_id: Union[str, int], field_name: str = "steam_id") -
 def validate_app_id(app_id: Union[str, int], field_name: str = "app_id") -> int:
     try:
         value = int(app_id)
+    except (TypeError, ValueError) as exc:
+        raise SteamValidationError(f"{field_name} must be an integer.") from exc
+    if value <= 0:
+        raise SteamValidationError(f"{field_name} must be greater than zero.")
+    return value
+
+
+def validate_account_id(account_id: Union[str, int], field_name: str = "account_id") -> int:
+    try:
+        value = int(account_id)
     except (TypeError, ValueError) as exc:
         raise SteamValidationError(f"{field_name} must be an integer.") from exc
     if value <= 0:
@@ -175,6 +188,61 @@ def parse_steam_profile_identifier(
         "type": "vanity",
         "value": normalized.strip("/"),
     }
+
+
+def steam_id_to_account_id(steam_id: Union[str, int]) -> int:
+    normalized = int(validate_steam_id(steam_id, "steam_id"))
+    return normalized - STEAM_ID64_BASE
+
+
+def account_id_to_steam_id(account_id: Union[str, int]) -> str:
+    normalized = validate_account_id(account_id, "account_id")
+    return str(STEAM_ID64_BASE + normalized)
+
+
+def parse_trade_offer_url(trade_url: str) -> Dict[str, Union[str, int]]:
+    normalized = ensure_not_blank(trade_url, "trade_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("trade_url must be an http or https URL.")
+    if parsed.netloc.lower() not in {"steamcommunity.com", "www.steamcommunity.com"}:
+        raise SteamValidationError("trade_url must point to steamcommunity.com.")
+    query = parse_qs(parsed.query)
+    partner_id = query.get("partner", [None])[0]
+    token = query.get("token", [None])[0]
+    if not partner_id:
+        raise SteamValidationError("trade_url is missing the partner query parameter.")
+    if not token:
+        raise SteamValidationError("trade_url is missing the token query parameter.")
+    account_id = validate_account_id(partner_id, "partner_id")
+    return {
+        "trade_url": normalized,
+        "partner_id": str(account_id),
+        "partner_account_id": account_id,
+        "partner_steam_id": account_id_to_steam_id(account_id),
+        "token": token,
+    }
+
+
+def build_trade_offer_url(
+    *,
+    token: str,
+    partner_account_id: Union[str, int, None] = None,
+    partner_steam_id: Union[str, int, None] = None,
+) -> str:
+    normalized_token = ensure_not_blank(token, "token")
+    if partner_account_id is None and partner_steam_id is None:
+        raise SteamValidationError(
+            "build_trade_offer_url requires either partner_account_id or partner_steam_id."
+        )
+    if partner_account_id is not None:
+        account_id = validate_account_id(partner_account_id, "partner_account_id")
+    else:
+        account_id = steam_id_to_account_id(partner_steam_id)
+    return "https://steamcommunity.com/tradeoffer/new/?partner={0}&token={1}".format(
+        account_id,
+        normalized_token,
+    )
 
 
 def load_api_key_from_json(path: Union[str, Path]) -> str:

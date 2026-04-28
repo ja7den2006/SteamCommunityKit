@@ -8,6 +8,10 @@ from steamcommunitykit import (
     SteamNotFoundError,
     SteamRateLimitError,
     SteamValidationError,
+    account_id_to_steam_id,
+    build_trade_offer_url,
+    parse_trade_offer_url,
+    steam_id_to_account_id,
 )
 from steamcommunitykit.http import SteamHTTPTransport
 
@@ -162,6 +166,28 @@ def test_community_credentials_can_be_created_from_cookie_pair() -> None:
     assert credentials.session_id == "session123"
     assert credentials.access_token == "token123"
     assert credentials.steam_login_secure == "76561197960435530%7C%7Ctoken123"
+
+
+def test_steam_id_account_id_conversion_helpers_round_trip() -> None:
+    steam_id = "76561199149579604"
+    account_id = steam_id_to_account_id(steam_id)
+
+    assert account_id == 1189313876
+    assert account_id_to_steam_id(account_id) == steam_id
+
+
+def test_trade_offer_url_helpers_parse_and_build() -> None:
+    trade_url = build_trade_offer_url(
+        partner_account_id=1189313876,
+        token="vrJtfrV_",
+    )
+    parsed = parse_trade_offer_url(trade_url)
+
+    assert trade_url == "https://steamcommunity.com/tradeoffer/new/?partner=1189313876&token=vrJtfrV_"
+    assert parsed["partner_id"] == "1189313876"
+    assert parsed["partner_account_id"] == 1189313876
+    assert parsed["partner_steam_id"] == "76561199149579604"
+    assert parsed["token"] == "vrJtfrV_"
 
 
 def test_users_service_uses_public_player_summaries_endpoint() -> None:
@@ -525,6 +551,37 @@ def test_client_can_login_with_refresh_token() -> None:
 
     assert returned == expected_credentials
     assert client._transport.community_credentials == expected_credentials
+    client.close()
+
+
+def test_client_can_get_owned_games_for_user_from_vanity_identifier() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={"response": {"steamid": "76561197968052866", "success": 1}}),
+            DummyResponse(json_data={"response": {"game_count": 1, "games": [{"appid": 570}]}}),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    owned_games = client.get_owned_games_for_user("gaben", include_appinfo=False)
+
+    assert owned_games["game_count"] == 1
+    assert owned_games["games"][0]["appid"] == 570
+    assert len(session.calls) == 2
+    client.close()
+
+
+def test_client_can_get_friend_list_for_user_from_profile_url() -> None:
+    session = RecordingSession(
+        DummyResponse(json_data={"friendslist": {"friends": [{"steamid": "76561197960435530"}]}})
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    friends = client.get_friend_list_for_user("https://steamcommunity.com/profiles/76561197960434622/")
+
+    assert friends["friendslist"]["friends"][0]["steamid"] == "76561197960435530"
+    call = session.calls[0]
+    assert call["params"]["steamid"] == "76561197960434622"
     client.close()
 
 

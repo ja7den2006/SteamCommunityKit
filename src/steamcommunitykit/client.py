@@ -69,6 +69,57 @@ class SteamClient:
     def set_community_credentials(self, credentials: CommunityCredentials) -> None:
         self._transport.community_credentials = credentials
 
+    def resolve_steam_id(self, identifier, url_type=None) -> str:
+        return self.users.resolve_steam_id(identifier, url_type=url_type)
+
+    def get_player_summary(self, identifier, url_type=None) -> dict:
+        return self.users.get_player_summary(identifier, url_type=url_type)
+
+    def get_friend_list_for_user(self, identifier, relationship: str = "friend", url_type=None) -> dict:
+        return self.users.get_friend_list(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            relationship=relationship,
+        )
+
+    def get_user_group_list_for_user(self, identifier, url_type=None) -> dict:
+        return self.users.get_user_group_list(
+            self.resolve_steam_id(identifier, url_type=url_type),
+        )
+
+    def get_owned_games_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.get_owned_games(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
+    def get_recently_played_games_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.get_recently_played_games(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
+    def get_single_game_playtime_for_user(self, identifier, app_id, url_type=None) -> dict:
+        return self.players.get_single_game_playtime(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+        )
+
+    def get_steam_level_for_user(self, identifier, url_type=None) -> dict:
+        return self.players.get_steam_level(
+            self.resolve_steam_id(identifier, url_type=url_type),
+        )
+
+    def get_badges_for_user(self, identifier, url_type=None) -> dict:
+        return self.players.get_badges(
+            self.resolve_steam_id(identifier, url_type=url_type),
+        )
+
+    def get_community_badge_progress_for_user(self, identifier, badge_id: int, url_type=None) -> dict:
+        return self.players.get_community_badge_progress(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            badge_id,
+        )
+
     def set_community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:
         credentials = self.auth.community_credentials_from_cookie_string(cookie_string)
         self.set_community_credentials(credentials)

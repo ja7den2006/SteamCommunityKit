@@ -11,7 +11,12 @@ from urllib.parse import parse_qs, urlparse
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
 from steamcommunitykit.exceptions import SteamResponseError, SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
+from steamcommunitykit.utils import (
+    build_trade_offer_url,
+    ensure_not_blank,
+    parse_trade_offer_url,
+    validate_steam_id,
+)
 
 
 class CommunityService:
@@ -99,18 +104,7 @@ class CommunityService:
         )
         if not match:
             raise SteamResponseError("Steam did not expose a trade offer URL on the privacy page.")
-        trade_url = html.unescape(match.group(1))
-        parsed = urlparse(trade_url)
-        query = parse_qs(parsed.query)
-        partner_id = query.get("partner", [None])[0]
-        token = query.get("token", [None])[0]
-        if not partner_id or not token:
-            raise SteamResponseError("Steam returned a malformed trade offer URL.")
-        return {
-            "trade_url": trade_url,
-            "partner_id": partner_id,
-            "token": token,
-        }
+        return parse_trade_offer_url(html.unescape(match.group(1)))
 
     def rotate_trade_offer_url(self, steam_id=None) -> dict:
         credentials = self.transport.require_community_credentials()
@@ -131,16 +125,12 @@ class CommunityService:
         token = token.strip().strip('"')
         account_info = self.get_account_info(normalized_steam_id)
         partner_id = str(account_info["accountid"])
-        return {
-            "trade_url": (
-                "https://steamcommunity.com/tradeoffer/new/?partner={0}&token={1}".format(
-                    partner_id,
-                    token,
-                )
-            ),
-            "partner_id": partner_id,
-            "token": token,
-        }
+        return parse_trade_offer_url(
+            build_trade_offer_url(
+                partner_account_id=partner_id,
+                token=token,
+            )
+        )
 
     def get_web_api_key_status(self) -> dict:
         html_text = self.transport.request(

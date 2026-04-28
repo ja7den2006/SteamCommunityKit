@@ -17,6 +17,12 @@ from steamcommunitykit.models import (
     CreatedGroup,
     QRAuthSession,
 )
+from steamcommunitykit.utils import (
+    account_id_to_steam_id,
+    build_trade_offer_url,
+    parse_trade_offer_url,
+    steam_id_to_account_id,
+)
 
 __all__ = [
     "AvailabilityResult",
@@ -34,4 +40,8 @@ __all__ = [
     "SteamRateLimitError",
     "SteamResponseError",
     "SteamValidationError",
+    "account_id_to_steam_id",
+    "build_trade_offer_url",
+    "parse_trade_offer_url",
+    "steam_id_to_account_id",
 ]
