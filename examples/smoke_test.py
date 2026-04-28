@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 
@@ -300,26 +301,36 @@ def run_public_suite(client: SteamClient, args) -> None:
 
 def run_community_suite(client: SteamClient, args) -> None:
     print_header("Community / Logged-In Tests")
+    cache = {}
 
     run_check(
         "Get Account Info",
-        lambda: str(client.community.get_account_info()),
+        lambda: _capture_result(cache, "account_info", client.community.get_account_info, str),
     )
     run_check(
         "Get Profile Edit State",
-        lambda: "persona={0}".format(client.community.get_profile_edit_state().get("strPersonaName", "")),
+        lambda: _capture_result(
+            cache,
+            "profile_edit_state",
+            client.community.get_profile_edit_state,
+            lambda payload: "persona={0}".format(payload.get("strPersonaName", "")),
+        ),
     )
     run_check(
         "Get Profile Privacy",
-        lambda: str(client.community.get_profile_privacy()),
+        lambda: _capture_result(cache, "profile_privacy", client.community.get_profile_privacy, str),
     )
     run_check(
         "Get Trade Offer URL",
-        lambda: str(client.community.get_trade_offer_url()),
+        lambda: _capture_result(cache, "trade_offer_url", client.community.get_trade_offer_url, str),
     )
     run_check(
         "Get Web API Key Status",
-        lambda: str(client.community.get_web_api_key_status()),
+        lambda: _capture_result(cache, "web_api_key_status", client.community.get_web_api_key_status, str),
+    )
+    run_check(
+        "Fetch Group ID64",
+        lambda: str(client.groups.fetch_group_id64(args.group_url)),
     )
     run_check(
         "Check Group Name Availability",
@@ -341,14 +352,34 @@ def run_community_suite(client: SteamClient, args) -> None:
         "Get Group Members",
         lambda: "members={0}".format(len(client.groups.get_group_members(args.group_url).get("members", []))),
     )
+    run_check(
+        "Community Cookie Export/Import Roundtrip",
+        lambda: _format_cookie_roundtrip(client, args),
+    )
+
+    if args.editable_group_url:
+        run_check(
+            "Fetch Editable Group ID",
+            lambda: str(client.groups.fetch_group_id(args.editable_group_url)),
+        )
 
     if args.write_checks:
         run_check(
             "Write Check: Edit Profile With Current Persona",
             lambda: str(
                 client.community.edit_profile(
-                    persona_name=client.community.get_profile_edit_state().get("strPersonaName", "SteamCommunityKit")
+                    persona_name=(cache.get("profile_edit_state") or client.community.get_profile_edit_state()).get(
+                        "strPersonaName",
+                        "SteamCommunityKit",
+                    )
                 )
+            ),
+        )
+        run_check(
+            "Write Check: Set Profile Privacy With Current Values",
+            lambda: _format_privacy_roundtrip(
+                client,
+                cache.get("profile_privacy") or client.community.get_profile_privacy(),
             ),
         )
 
@@ -356,6 +387,18 @@ def run_community_suite(client: SteamClient, args) -> None:
         run_check(
             "Write Check: Rotate Trade URL",
             lambda: str(client.community.rotate_trade_offer_url()),
+        )
+
+    if args.write_checks and (cache.get("account_info") or client.community.get_account_info()).get("is_limited"):
+        run_check(
+            "Expected Denial: Limited Account Group Creation",
+            lambda: _expect_limited_group_creation_denial(client),
+        )
+
+    if args.write_checks and args.avatar_image:
+        run_check(
+            "Write Check: Upload Avatar",
+            lambda: str(client.community.upload_avatar(args.avatar_image)),
         )
 
 
@@ -390,6 +433,58 @@ def _format_trade_history(payload: dict) -> str:
     )
 
 
+def _format_cookie_roundtrip(client: SteamClient, args) -> str:
+    cookie_string = client.export_community_cookie_string()
+    roundtrip_client = build_client(args)
+    try:
+        roundtrip_client.set_community_credentials_from_cookie_string(cookie_string)
+        info = roundtrip_client.community.get_account_info()
+        return "steamid={0} logged_in={1}".format(
+            info.get("steamid", "<unknown>"),
+            info.get("logged_in", False),
+        )
+    finally:
+        roundtrip_client.close()
+
+
+def _capture_result(cache: dict, key: str, fetcher, formatter=str) -> str:
+    value = fetcher()
+    cache[key] = value
+    return formatter(value)
+
+
+def _format_privacy_roundtrip(client: SteamClient, privacy: dict) -> str:
+    settings = privacy.get("PrivacySettings", {})
+    response = client.community.set_profile_privacy(
+        privacy_profile=settings.get("PrivacyProfile", 1),
+        privacy_inventory=settings.get("PrivacyInventory", 1),
+        privacy_inventory_gifts=settings.get("PrivacyInventoryGifts", 1),
+        privacy_owned_games=settings.get("PrivacyOwnedGames", 1),
+        privacy_playtime=settings.get("PrivacyPlaytime", 1),
+        privacy_friends_list=settings.get("PrivacyFriendsList", 1),
+        comment_permission=privacy.get("eCommentPermission", 0),
+    )
+    return str(response)
+
+
+def _expect_limited_group_creation_denial(client: SteamClient) -> str:
+    suffix = str(int(time.time()))
+    try:
+        client.groups.create_group(
+            name="steamcommunitykit-{0}".format(suffix),
+            abbreviation="sk{0}".format(suffix[-6:]),
+            group_url="steamcommunitykit-{0}".format(suffix),
+            validate_availability=False,
+            wait_for_sync=0.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        if "does not meet the requirements" in message.lower():
+            return "limited-account denial confirmed"
+        raise
+    raise AssertionError("Expected Steam to reject group creation for a limited account.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SteamCommunityKit smoke test for both public API-key flows and logged-in community flows."
@@ -412,6 +507,10 @@ def parse_args() -> argparse.Namespace:
         "--group-url",
         default=DEFAULT_GROUP_URL,
         help="Public group URL slug used for group read tests.",
+    )
+    parser.add_argument(
+        "--editable-group-url",
+        help="Group URL slug for a group the logged-in account can edit, used for fetch_group_id tests.",
     )
     parser.add_argument(
         "--published-file-id",
@@ -447,6 +546,11 @@ def parse_args() -> argparse.Namespace:
         "--rotate-trade-url",
         action="store_true",
         help="Actually rotate the account's trade offer URL token.",
+    )
+    parser.add_argument(
+        "--avatar-image",
+        type=Path,
+        help="Path to an image file used for an optional avatar upload write test.",
     )
     parser.add_argument(
         "--include-conditional",
