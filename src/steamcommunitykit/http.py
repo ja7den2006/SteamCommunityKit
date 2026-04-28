@@ -142,6 +142,8 @@ class SteamHTTPTransport:
             message = self._extract_error_message(payload) or message
         except ValueError:
             message = response.text[:500] or f"HTTP {response.status_code}"
+            if "Family View" in response.text:
+                message = "Steam Family View is blocking this action. Unlock or disable Family View and try again."
 
         status_code = response.status_code
         error_cls: type[SteamHTTPError]

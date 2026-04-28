@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import requests
 
@@ -139,11 +139,21 @@ class SteamClient:
         password: str,
         *,
         persistence: bool = True,
+        steam_guard_code: Optional[str] = None,
+        steam_guard_code_provider: Optional[Callable[[dict], str]] = None,
+        prompt_for_steam_guard: bool = False,
+        poll_interval: float = 1.5,
+        poll_timeout: float = 60.0,
     ) -> CredentialLoginResult:
         login_result = self.auth.login_with_credentials(
             account_name,
             password,
             persistence=persistence,
+            steam_guard_code=steam_guard_code,
+            steam_guard_code_provider=steam_guard_code_provider,
+            prompt_for_steam_guard=prompt_for_steam_guard,
+            poll_interval=poll_interval,
+            poll_timeout=poll_timeout,
         )
         credentials = self.auth.community_credentials_from_login(login_result)
         self.set_community_credentials(credentials)

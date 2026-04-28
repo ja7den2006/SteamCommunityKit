@@ -117,6 +117,14 @@ def test_transport_raises_rate_limit_error_after_exhausting_retries() -> None:
         transport.request("GET", "https://example.com", require_api_key=True)
 
 
+def test_transport_maps_family_view_html_to_clear_auth_error() -> None:
+    html = "<html><head><title>Family View</title></head><body>blocked</body></html>"
+    transport = SteamHTTPTransport(session=DummySession(DummyResponse(status_code=403, text=html)))
+
+    with pytest.raises(SteamAuthenticationError, match="Family View is blocking this action"):
+        transport.request("GET", "https://example.com")
+
+
 def test_client_exposes_expected_services() -> None:
     client = SteamClient(api_key="test")
     assert client.users is not None
@@ -514,6 +522,53 @@ def test_client_login_to_community_sets_credentials() -> None:
     client.close()
 
 
+def test_client_login_to_community_forwards_steam_guard_options() -> None:
+    client = SteamClient(api_key="test")
+
+    captured = {}
+    login_result = CredentialLoginResult(
+        steam_id="76561197960435530",
+        account_name="tester",
+        client_id=1,
+        request_id="req",
+        access_token="access123",
+        refresh_token="refresh123",
+    )
+    expected_credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        steam_login_secure="securecookie123",
+    )
+
+    original_login = client.auth.login_with_credentials
+    original_build = client.auth.community_credentials_from_login
+
+    def fake_login(*args, **kwargs):
+        captured.update(kwargs)
+        return login_result
+
+    client.auth.login_with_credentials = fake_login
+    client.auth.community_credentials_from_login = lambda result: expected_credentials
+
+    client.login_to_community(
+        "tester",
+        "secret",
+        steam_guard_code="123456",
+        prompt_for_steam_guard=True,
+        poll_interval=2.0,
+        poll_timeout=90.0,
+    )
+
+    client.auth.login_with_credentials = original_login
+    client.auth.community_credentials_from_login = original_build
+
+    assert captured["steam_guard_code"] == "123456"
+    assert captured["prompt_for_steam_guard"] is True
+    assert captured["poll_interval"] == 2.0
+    assert captured["poll_timeout"] == 90.0
+    client.close()
+
+
 def test_client_can_set_community_credentials_from_cookie_string() -> None:
     client = SteamClient(api_key="test")
 
@@ -618,6 +673,81 @@ def test_auth_can_build_community_credentials_from_refresh_token() -> None:
     assert credentials.session_id == "session123"
     assert credentials.refresh_token == "refresh123"
     assert credentials.steam_login_secure == "76561197960435530%7C%7Ctoken123"
+    client.close()
+
+
+def test_auth_login_with_credentials_uses_steam_guard_code_when_required() -> None:
+    client = SteamClient(api_key="test")
+    started = {
+        "client_id": 1,
+        "request_id": "req",
+        "steamid": "76561197960435530",
+        "allowed_confirmations": [{"confirmation_type": 3}],
+    }
+    polls = [
+        {"had_remote_interaction": False},
+        {
+            "account_name": "tester",
+            "access_token": "access123",
+            "refresh_token": "refresh123",
+            "had_remote_interaction": True,
+        },
+    ]
+    updates = []
+
+    original_begin = client.auth.begin_auth_session_via_credentials
+    original_poll = client.auth.poll_auth_session_status
+    original_update = client.auth.update_auth_session_with_steam_guard_code
+
+    client.auth.begin_auth_session_via_credentials = lambda *args, **kwargs: started
+    client.auth.poll_auth_session_status = lambda *args, **kwargs: polls.pop(0)
+    client.auth.update_auth_session_with_steam_guard_code = (
+        lambda client_id, steam_id, code_type, code: updates.append((client_id, steam_id, code_type, code))
+    )
+
+    result = client.auth.login_with_credentials(
+        "tester",
+        "secret",
+        steam_guard_code="654321",
+        poll_interval=0.01,
+        poll_timeout=0.02,
+    )
+
+    client.auth.begin_auth_session_via_credentials = original_begin
+    client.auth.poll_auth_session_status = original_poll
+    client.auth.update_auth_session_with_steam_guard_code = original_update
+
+    assert result.access_token == "access123"
+    assert result.refresh_token == "refresh123"
+    assert updates == [(1, "76561197960435530", 3, "654321")]
+    client.close()
+
+
+def test_auth_login_with_credentials_raises_clear_error_when_guard_code_missing() -> None:
+    client = SteamClient(api_key="test")
+    started = {
+        "client_id": 1,
+        "request_id": "req",
+        "steamid": "76561197960435530",
+        "allowed_confirmations": [{"confirmation_type": 3}],
+    }
+
+    original_begin = client.auth.begin_auth_session_via_credentials
+    original_poll = client.auth.poll_auth_session_status
+
+    client.auth.begin_auth_session_via_credentials = lambda *args, **kwargs: started
+    client.auth.poll_auth_session_status = lambda *args, **kwargs: {"had_remote_interaction": False}
+
+    with pytest.raises(SteamAuthenticationError, match="Steam Guard mobile authenticator code is required"):
+        client.auth.login_with_credentials(
+            "tester",
+            "secret",
+            poll_interval=0.01,
+            poll_timeout=0.02,
+        )
+
+    client.auth.begin_auth_session_via_credentials = original_begin
+    client.auth.poll_auth_session_status = original_poll
     client.close()
 
 

@@ -58,7 +58,12 @@ def configure_community_session(client: SteamClient, args) -> bool:
         client.login_to_community_with_refresh_token(args.refresh_token)
         return True
     if args.username and args.password:
-        client.login_to_community(args.username, args.password)
+        client.login_to_community(
+            args.username,
+            args.password,
+            steam_guard_code=args.steam_guard_code,
+            prompt_for_steam_guard=not args.no_prompt_steam_guard,
+        )
         return True
     return False
 
@@ -493,6 +498,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-key", help="Steam Web API key.")
     parser.add_argument("--username", help="Steam username for community login.")
     parser.add_argument("--password", help="Steam password for community login.")
+    parser.add_argument("--steam-guard-code", help="Steam Guard code to use for credential login.")
+    parser.add_argument(
+        "--no-prompt-steam-guard",
+        action="store_true",
+        help="Do not prompt for a Steam Guard code when Steam requests one.",
+    )
     parser.add_argument("--refresh-token", help="Steam refresh token for community login reuse.")
     parser.add_argument("--cookie-string", help="Community cookie string: sessionid=...; steamLoginSecure=...")
     parser.add_argument("--steam-id", default=DEFAULT_STEAM_ID, help="SteamID64 used for public API tests.")
@@ -571,7 +582,12 @@ def main() -> int:
             print("Skipped public API-key tests. Provide --api-key or --api-json to run them.")
 
         if not args.public_only:
-            has_community_session = configure_community_session(client, args)
+            try:
+                has_community_session = configure_community_session(client, args)
+            except Exception as exc:  # noqa: BLE001
+                print_header("Community / Logged-In Tests")
+                print_result("Community Login", False, "{0}: {1}".format(type(exc).__name__, exc))
+                return 1
             if has_community_session:
                 run_community_suite(client, args)
             else:

@@ -3,11 +3,13 @@ from __future__ import annotations
 import base64
 import time
 import urllib.parse
+from typing import Callable, Optional
 
 import jwt
 import rsa
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL, QR_IMAGE_BASE_URL, WEB_API_BASE_URL
+from steamcommunitykit.exceptions import SteamAuthenticationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult, QRAuthSession
 from steamcommunitykit.utils import ensure_not_blank, parse_cookie_string, validate_steam_id
@@ -71,6 +73,15 @@ class AuthenticationService:
             "POST",
             f"{self.base_url}/PollAuthSessionStatus/v1/",
             data={"client_id": int(client_id), "request_id": request_id},
+            headers={
+                "X-Requested-With": "com.valvesoftware.android.steam.community",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-User": "?1",
+                "Sec-Fetch-Dest": "document",
+                "Accept-Encoding": "gzip, deflate",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
         )
 
     def begin_auth_session_via_qr(
@@ -160,22 +171,138 @@ class AuthenticationService:
         password: str,
         *,
         persistence: bool = True,
+        steam_guard_code: Optional[str] = None,
+        steam_guard_code_provider: Optional[Callable[[dict], str]] = None,
+        prompt_for_steam_guard: bool = False,
+        poll_interval: float = 1.5,
+        poll_timeout: float = 60.0,
     ) -> CredentialLoginResult:
         started = self.begin_auth_session_via_credentials(
             account_name,
             password,
             persistence=persistence,
         )
-        polled = self.poll_auth_session_status(int(started["client_id"]), started["request_id"])
+        client_id = int(started["client_id"])
+        request_id = str(started["request_id"])
+        steam_id = str(started["steamid"])
+        polled = self._poll_for_tokens(
+            client_id,
+            request_id,
+            timeout=0.0,
+            interval=poll_interval,
+        )
+        if not self._has_auth_tokens(polled):
+            confirmation = self._select_steam_guard_confirmation(started)
+            if confirmation is not None:
+                code = steam_guard_code
+                if code is None and steam_guard_code_provider is not None:
+                    code = steam_guard_code_provider(started)
+                if code is None and prompt_for_steam_guard:
+                    code = self.prompt_for_steam_guard_code(confirmation)
+                if code is None:
+                    raise SteamAuthenticationError(
+                        self._format_steam_guard_required_message(confirmation),
+                        status_code=401,
+                        payload=started,
+                    )
+                self.update_auth_session_with_steam_guard_code(
+                    client_id,
+                    steam_id,
+                    int(confirmation["confirmation_type"]),
+                    code,
+                )
+                polled = self._poll_for_tokens(
+                    client_id,
+                    request_id,
+                    timeout=poll_timeout,
+                    interval=poll_interval,
+                )
+        if not self._has_auth_tokens(polled):
+            raise SteamAuthenticationError(
+                self._extract_login_failure_message(polled),
+                status_code=401,
+                payload=polled,
+            )
         return CredentialLoginResult(
-            steam_id=str(started["steamid"]),
+            steam_id=steam_id,
             account_name=str(polled.get("account_name") or ensure_not_blank(account_name, "account_name")),
-            client_id=int(started["client_id"]),
-            request_id=str(started["request_id"]),
+            client_id=client_id,
+            request_id=request_id,
             access_token=str(polled["access_token"]),
             refresh_token=str(polled["refresh_token"]),
             had_remote_interaction=bool(polled.get("had_remote_interaction", False)),
         )
+
+    @staticmethod
+    def _has_auth_tokens(payload: dict) -> bool:
+        return bool(payload.get("access_token") and payload.get("refresh_token"))
+
+    def _poll_for_tokens(
+        self,
+        client_id: int,
+        request_id: str,
+        *,
+        timeout: float,
+        interval: float,
+    ) -> dict:
+        deadline = time.monotonic() + max(timeout, 0.0)
+        last_response = self.poll_auth_session_status(client_id, request_id)
+        if self._has_auth_tokens(last_response) or time.monotonic() >= deadline:
+            return last_response
+        while time.monotonic() < deadline:
+            time.sleep(max(interval, 0.1))
+            last_response = self.poll_auth_session_status(client_id, request_id)
+            if self._has_auth_tokens(last_response):
+                return last_response
+        return last_response
+
+    @staticmethod
+    def _select_steam_guard_confirmation(payload: dict) -> Optional[dict]:
+        confirmations = payload.get("allowed_confirmations") or []
+        for preferred_type in (3, 2):
+            for confirmation in confirmations:
+                if int(confirmation.get("confirmation_type", 0)) == preferred_type:
+                    return confirmation
+        for confirmation in confirmations:
+            if confirmation.get("confirmation_type"):
+                return confirmation
+        return None
+
+    @staticmethod
+    def _format_steam_guard_required_message(confirmation: dict) -> str:
+        confirmation_type = int(confirmation.get("confirmation_type", 0))
+        associated_message = (confirmation.get("associated_message") or "").strip()
+        if confirmation_type == 3:
+            return "A Steam Guard mobile authenticator code is required for this login."
+        if confirmation_type == 2 and associated_message:
+            return "A Steam Guard email code is required for this login ({0}).".format(associated_message)
+        if confirmation_type == 2:
+            return "A Steam Guard email code is required for this login."
+        return "A Steam Guard confirmation is required for this login."
+
+    @staticmethod
+    def prompt_for_steam_guard_code(confirmation: dict) -> str:
+        confirmation_type = int(confirmation.get("confirmation_type", 0))
+        associated_message = (confirmation.get("associated_message") or "").strip()
+        if confirmation_type == 3:
+            prompt = "Steam mobile authenticator code: "
+        elif confirmation_type == 2 and associated_message:
+            prompt = "Steam Guard email code ({0}): ".format(associated_message)
+        elif confirmation_type == 2:
+            prompt = "Steam Guard email code: "
+        else:
+            prompt = "Steam Guard code: "
+        return ensure_not_blank(input(prompt), "steam_guard_code")
+
+    @staticmethod
+    def _extract_login_failure_message(payload: dict) -> str:
+        for key in ("message", "error", "agreement_session_url", "extended_error_message"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        if payload.get("had_remote_interaction"):
+            return "Steam login was not completed after remote interaction."
+        return "Steam login did not return access tokens."
 
     def community_credentials_from_login(self, login_result: CredentialLoginResult) -> CommunityCredentials:
         session_id = self.create_session_id()
@@ -191,6 +318,7 @@ class AuthenticationService:
             steam_id=login_result.steam_id,
             session_id=session_id,
             access_token=login_result.access_token,
+            refresh_token=login_result.refresh_token,
             steam_login_secure=steam_login_secure,
         )
 
