@@ -304,6 +304,18 @@ def run_public_suite(client: SteamClient, args) -> None:
         )
 
 
+def run_no_key_public_suite(client: SteamClient, args) -> None:
+    print_header("Public / No-Key Community Tests")
+    run_check(
+        "Resolve Steam ID From Vanity (Community XML)",
+        lambda: client.resolve_steam_id(args.vanity),
+    )
+    run_check(
+        "Resolve Community Profile XML",
+        lambda: "persona={0}".format(client.users.resolve_community_profile_xml(args.profile_identifier).get("personaname", "")),
+    )
+
+
 def run_community_suite(client: SteamClient, args) -> None:
     print_header("Community / Logged-In Tests")
     cache = {}
@@ -619,8 +631,7 @@ def main() -> int:
         if not args.community_only and client.api_key:
             run_public_suite(client, args)
         elif not args.community_only:
-            print_header("Public / API Key Tests")
-            print("Skipped public API-key tests. Provide --api-key or --api-json to run them.")
+            run_no_key_public_suite(client, args)
 
         if not args.public_only:
             try:

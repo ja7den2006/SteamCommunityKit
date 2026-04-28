@@ -14,6 +14,7 @@ from steamcommunitykit.services import (
     CommunityService,
     EconService,
     GroupsService,
+    InventoryService,
     NewsService,
     PlayersService,
     PublishedFilesService,
@@ -54,6 +55,7 @@ class SteamClient:
         self.econ = EconService(self._transport)
         self.community = CommunityService(self._transport)
         self.groups = GroupsService(self._transport)
+        self.inventory = InventoryService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
         self.remote_storage = RemoteStorageService(self._transport)
@@ -118,6 +120,46 @@ class SteamClient:
         return self.players.get_community_badge_progress(
             self.resolve_steam_id(identifier, url_type=url_type),
             badge_id,
+        )
+
+    def get_inventory_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_inventory(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
+    def get_inventory_items_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_inventory_items(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
         )
 
     def set_community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:

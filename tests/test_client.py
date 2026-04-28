@@ -137,6 +137,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.econ is not None
     assert client.community is not None
     assert client.groups is not None
+    assert client.inventory is not None
     assert client.store is not None
     assert client.published_files is not None
     assert client.remote_storage is not None
@@ -266,6 +267,58 @@ def test_users_resolve_steam_id_accepts_plain_vanity_name() -> None:
     resolved = client.users.resolve_steam_id("gaben")
 
     assert resolved == "76561197968052866"
+    client.close()
+
+
+def test_users_resolve_steam_id_falls_back_to_community_xml_without_api_key() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile>
+      <steamID64>76561197968052866</steamID64>
+      <steamID><![CDATA[Gaben]]></steamID>
+      <customURL><![CDATA[gaben]]></customURL>
+      <profileURL><![CDATA[https://steamcommunity.com/id/gaben/]]></profileURL>
+    </profile>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(session=session)
+
+    resolved = client.users.resolve_steam_id("gaben")
+
+    assert resolved == "76561197968052866"
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/id/gaben/"
+    assert call["params"]["xml"] == "1"
+    client.close()
+
+
+def test_users_resolve_community_profile_xml_returns_profile_fields() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile>
+      <steamID64>76561197968052866</steamID64>
+      <steamID><![CDATA[Gaben]]></steamID>
+      <customURL><![CDATA[gaben]]></customURL>
+      <profileURL><![CDATA[https://steamcommunity.com/id/gaben/]]></profileURL>
+      <avatarIcon><![CDATA[icon.jpg]]></avatarIcon>
+      <avatarMedium><![CDATA[medium.jpg]]></avatarMedium>
+      <avatarFull><![CDATA[full.jpg]]></avatarFull>
+      <privacyState>public</privacyState>
+      <visibilityState>3</visibilityState>
+      <stateMessage><![CDATA[Offline]]></stateMessage>
+      <onlineState>offline</onlineState>
+    </profile>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(session=session)
+
+    profile = client.users.resolve_community_profile_xml("https://steamcommunity.com/id/gaben/")
+
+    assert profile["steamid"] == "76561197968052866"
+    assert profile["personaname"] == "Gaben"
+    assert profile["custom_url"] == "gaben"
+    assert profile["profile_url"] == "https://steamcommunity.com/id/gaben/"
+    assert profile["privacy_state"] == "public"
     client.close()
 
 
@@ -649,6 +702,60 @@ def test_client_can_get_owned_games_for_user_from_vanity_identifier() -> None:
     assert owned_games["game_count"] == 1
     assert owned_games["games"][0]["appid"] == 570
     assert len(session.calls) == 2
+    client.close()
+
+
+def test_inventory_service_uses_community_inventory_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"assets": [], "descriptions": [], "total_inventory_count": 0}))
+    client = SteamClient(session=session)
+
+    client.inventory.get_inventory("76561197960435530", 730, 2, language="english", count=5000, start_asset_id="123")
+
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/inventory/76561197960435530/730/2"
+    assert call["params"]["l"] == "english"
+    assert call["params"]["count"] == 5000
+    assert call["params"]["start_assetid"] == "123"
+    client.close()
+
+
+def test_inventory_service_combines_assets_with_descriptions() -> None:
+    payload = {
+        "assets": [{"assetid": "1", "classid": "10", "instanceid": "0"}],
+        "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "Example Item"}],
+        "total_inventory_count": 1,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_inventory_items("76561197960435530", 730, 2)
+
+    assert result["total_inventory_count"] == 1
+    assert result["items"][0]["assetid"] == "1"
+    assert result["items"][0]["description"]["market_hash_name"] == "Example Item"
+    client.close()
+
+
+def test_client_can_get_inventory_for_user_without_api_key_via_vanity_resolution() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile><steamID64>76561197968052866</steamID64></profile>
+    """
+    inventory_payload = {"assets": [], "descriptions": [], "total_inventory_count": 0}
+    session = SequenceSession(
+        [
+            DummyResponse(text=xml),
+            DummyResponse(json_data=inventory_payload),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_inventory_for_user("gaben", 730, 2)
+
+    assert result["total_inventory_count"] == 0
+    assert session.calls[0]["url"] == "https://steamcommunity.com/id/gaben/"
+    assert session.calls[1]["url"] == "https://steamcommunity.com/inventory/76561197968052866/730/2"
     client.close()
 
 

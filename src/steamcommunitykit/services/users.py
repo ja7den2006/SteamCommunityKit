@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from steamcommunitykit.constants import WEB_API_BASE_URL
+import xml.etree.ElementTree as ET
+
+from steamcommunitykit.constants import COMMUNITY_BASE_URL, WEB_API_BASE_URL
 from steamcommunitykit.exceptions import SteamNotFoundError, SteamResponseError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import (
@@ -27,10 +29,52 @@ class UsersService:
             require_api_key=True,
         )
 
+    def resolve_community_profile_xml(self, identifier) -> dict:
+        parsed = parse_steam_profile_identifier(identifier)
+        if parsed["type"] == "steam_id":
+            url = "{0}/profiles/{1}/".format(COMMUNITY_BASE_URL, parsed["value"])
+        else:
+            url = "{0}/id/{1}/".format(COMMUNITY_BASE_URL, parsed["value"])
+        response_text = self.transport.request(
+            "GET",
+            url,
+            params={"xml": "1"},
+            expected="text",
+        )
+        try:
+            root = ET.fromstring(response_text.lstrip())
+        except ET.ParseError as exc:
+            raise SteamResponseError(
+                "Steam returned malformed profile XML: {0}".format(response_text[:500])
+            ) from exc
+        steam_id = root.findtext("steamID64")
+        if not steam_id:
+            raise SteamNotFoundError(
+                "Steam community profile could not be resolved for the provided identifier.",
+                status_code=404,
+                payload={"identifier": identifier},
+            )
+        return {
+            "steamid": validate_steam_id(steam_id, "steam_id"),
+            "personaname": root.findtext("steamID") or "",
+            "custom_url": root.findtext("customURL") or "",
+            "profile_url": root.findtext("profileURL") or "",
+            "avatar_icon": root.findtext("avatarIcon") or "",
+            "avatar_medium": root.findtext("avatarMedium") or "",
+            "avatar_full": root.findtext("avatarFull") or "",
+            "privacy_state": root.findtext("privacyState") or "",
+            "visibility_state": root.findtext("visibilityState") or "",
+            "state_message": root.findtext("stateMessage") or "",
+            "online_state": root.findtext("onlineState") or "",
+            "raw_xml": response_text,
+        }
+
     def resolve_steam_id(self, identifier, url_type=None) -> str:
         parsed = parse_steam_profile_identifier(identifier)
         if parsed["type"] == "steam_id":
             return parsed["value"]
+        if not self.transport.api_key:
+            return self.resolve_community_profile_xml(identifier)["steamid"]
 
         response = self.resolve_vanity_url(parsed["value"], url_type=url_type)
         steam_id = response.get("steamid")

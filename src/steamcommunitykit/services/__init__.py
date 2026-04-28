@@ -3,6 +3,7 @@ from steamcommunitykit.services.auth import AuthenticationService
 from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.econ import EconService
 from steamcommunitykit.services.groups import GroupsService
+from steamcommunitykit.services.inventory import InventoryService
 from steamcommunitykit.services.news import NewsService
 from steamcommunitykit.services.players import PlayersService
 from steamcommunitykit.services.published_files import PublishedFilesService
@@ -18,6 +19,7 @@ __all__ = [
     "CommunityService",
     "EconService",
     "GroupsService",
+    "InventoryService",
     "NewsService",
     "PlayersService",
     "PublishedFilesService",
