@@ -15,6 +15,7 @@ from steamcommunitykit.services import (
     CheatReportingService,
     CloudService,
     EconService,
+    EconMarketService,
     CommunityAPIService,
     CommunityService,
     GameNotificationsService,
@@ -66,6 +67,7 @@ class SteamClient:
         self.cheat_reporting = CheatReportingService(self._transport)
         self.cloud = CloudService(self._transport)
         self.econ = EconService(self._transport)
+        self.econ_market = EconMarketService(self._transport)
         self.community_api = CommunityAPIService(self._transport)
         self.community = CommunityService(self._transport)
         self.game_notifications = GameNotificationsService(self._transport)

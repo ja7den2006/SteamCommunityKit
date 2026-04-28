@@ -101,6 +101,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.community_api is not None
     assert client.cloud is not None
     assert client.econ is not None
+    assert client.econ_market is not None
     assert client.game_notifications is not None
     assert client.leaderboards is not None
     assert client.microtxn is not None
@@ -406,6 +407,51 @@ def test_microtxn_get_report_uses_api_base_url() -> None:
     assert call["params"]["type"] == "GAMESALES"
     assert call["params"]["maxresults"] == 1000
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_econ_market_get_market_eligibility_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"allowed": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ_market.get_market_eligibility("76561197960435530")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconMarketService/GetMarketEligibility/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
+    client.close()
+
+
+def test_econ_market_get_popular_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"results": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ_market.get_popular("en", rows=10, start=0, filter_app_id=730, ecurrency=1)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconMarketService/GetPopular/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"language":"en"' in call["params"]["input_json"]
+    assert '"rows":10' in call["params"]["input_json"]
+    assert '"start":0' in call["params"]["input_json"]
+    assert '"filter_appid":730' in call["params"]["input_json"]
+    assert '"ecurrency":1' in call["params"]["input_json"]
+    client.close()
+
+
+def test_econ_market_cancel_app_listings_for_user_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.econ_market.cancel_app_listings_for_user(730, "76561197960435530", synchronous=True)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IEconMarketService/CancelAppListingsForUser/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":730' in call["params"]["input_json"]
+    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
+    assert '"synchronous":true' in call["params"]["input_json"]
     client.close()
 
 

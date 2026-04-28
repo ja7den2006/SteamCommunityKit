@@ -4,6 +4,7 @@ from steamcommunitykit.services.broadcast import BroadcastService
 from steamcommunitykit.services.cheat_reporting import CheatReportingService
 from steamcommunitykit.services.cloud import CloudService
 from steamcommunitykit.services.econ import EconService
+from steamcommunitykit.services.econ_market import EconMarketService
 from steamcommunitykit.services.community_api import CommunityAPIService
 from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.game_notifications import GameNotificationsService
@@ -30,6 +31,7 @@ __all__ = [
     "CheatReportingService",
     "CloudService",
     "EconService",
+    "EconMarketService",
     "CommunityAPIService",
     "CommunityService",
     "GameNotificationsService",
