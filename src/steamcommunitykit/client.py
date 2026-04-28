@@ -474,6 +474,58 @@ class SteamClient:
             max_pages=max_pages,
         )
 
+    def get_full_inventory_items_summary_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_full_inventory_items_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def find_full_inventory_items_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.find_full_inventory_items(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+            name_query=name_query,
+            market_hash_name=market_hash_name,
+            tradable=tradable,
+            marketable=marketable,
+        )
+
     def set_community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:
         credentials = self.auth.community_credentials_from_cookie_string(cookie_string)
         self.set_community_credentials(credentials)

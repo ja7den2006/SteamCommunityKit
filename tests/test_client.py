@@ -1408,6 +1408,77 @@ def test_inventory_find_items_filters_by_name_and_flags() -> None:
     client.close()
 
 
+def test_inventory_full_items_summary_normalizes_paginated_inventory() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "One", "name": "One", "tradable": 1}],
+                    "total_inventory_count": 2,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "2", "classid": "11", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "11", "instanceid": "0", "market_hash_name": "Two", "name": "Two", "tradable": 0}],
+                    "total_inventory_count": 2,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_full_inventory_items_summary_for_user("76561197960435530", 730, 2, max_pages=2)
+
+    assert result["pages_fetched"] == 2
+    assert len(result["items"]) == 2
+    assert result["items_by_asset_id"]["2"]["market_hash_name"] == "Two"
+    client.close()
+
+
+def test_inventory_find_full_items_filters_across_pages() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "AK-47 | One", "name": "AK-47 | One", "tradable": 1, "marketable": 1}],
+                    "total_inventory_count": 2,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "2", "classid": "11", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "11", "instanceid": "0", "market_hash_name": "M4A4 | Two", "name": "M4A4 | Two", "tradable": 0, "marketable": 1}],
+                    "total_inventory_count": 2,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.find_full_inventory_items_for_user(
+        "76561197960435530",
+        730,
+        2,
+        max_pages=2,
+        name_query="AK-47",
+        tradable=True,
+    )
+
+    assert result["pages_fetched"] == 2
+    assert result["count"] == 1
+    assert result["items"][0]["market_hash_name"] == "AK-47 | One"
+    client.close()
+
+
 def test_inventory_service_can_fetch_full_inventory_across_pages() -> None:
     session = SequenceSession(
         [

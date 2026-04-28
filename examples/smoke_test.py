@@ -593,6 +593,31 @@ def run_community_suite(client: SteamClient, args) -> None:
             )
         ),
     )
+    run_check(
+        "Get Own Full Inventory Summary",
+        lambda: _format_inventory_items(
+            client.get_full_inventory_items_summary_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+                max_pages=2,
+            )
+        ),
+    )
+    run_check(
+        "Find Own Full Inventory Items",
+        lambda: _format_inventory_find(
+            client.find_full_inventory_items_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+                max_pages=2,
+                tradable=True,
+            )
+        ),
+    )
 
     if args.editable_group_url:
         run_check(

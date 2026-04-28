@@ -363,3 +363,94 @@ class InventoryService:
             "items": matches,
             "raw": payload,
         }
+
+    def get_full_inventory_items_summary(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        payload = self.get_full_inventory_items(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+        items = [self._normalize_inventory_item(item) for item in payload.get("items", [])]
+        items_by_asset_id = {
+            str(item["asset_id"]): item
+            for item in items
+            if item.get("asset_id") is not None
+        }
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "total_inventory_count": payload.get("total_inventory_count"),
+            "more_items": payload.get("more_items", False),
+            "last_assetid": payload.get("last_assetid"),
+            "pages_fetched": payload.get("pages_fetched", 0),
+            "items": items,
+            "items_by_asset_id": items_by_asset_id,
+            "pages": payload.get("pages", []),
+            "raw": payload,
+        }
+
+    def find_full_inventory_items(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+    ) -> dict:
+        payload = self.get_full_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+        query = (name_query or "").strip().lower()
+        exact_hash = (market_hash_name or "").strip().lower()
+        matches = []
+        for item in payload.get("items", []):
+            if query:
+                haystack = " ".join(
+                    part for part in [item.get("name"), item.get("market_name"), item.get("market_hash_name")] if part
+                ).lower()
+                if query not in haystack:
+                    continue
+            if exact_hash and (item.get("market_hash_name") or "").lower() != exact_hash:
+                continue
+            if tradable is not None and bool(item.get("tradable")) is not bool(tradable):
+                continue
+            if marketable is not None and bool(item.get("marketable")) is not bool(marketable):
+                continue
+            matches.append(item)
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "pages_fetched": payload.get("pages_fetched", 0),
+            "count": len(matches),
+            "items": matches,
+            "raw": payload,
+        }
