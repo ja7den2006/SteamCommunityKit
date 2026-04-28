@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Iterable, List, Union
 from urllib.parse import urlencode
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
@@ -91,3 +92,23 @@ class AppsService:
             "supported_languages": data.get("supported_languages") or "",
             "raw": data,
         }
+
+    def get_app_details_many(
+        self,
+        app_ids: Iterable[Union[str, int]],
+        *,
+        language: str = "english",
+        country: str = "US",
+        filters: str = "",
+    ) -> List[dict]:
+        results = []
+        for app_id in app_ids:
+            results.append(
+                self.get_app_details(
+                    app_id,
+                    language=language,
+                    country=country,
+                    filters=filters,
+                )
+            )
+        return results

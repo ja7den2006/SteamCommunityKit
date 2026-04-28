@@ -187,6 +187,16 @@ class UsersService:
         friends = payload.get("friendslist", {}).get("friends", [])
         return [friend.get("steamid") for friend in friends if friend.get("steamid")]
 
+    def get_friend_summaries(self, steam_id, relationship: str = "friend", limit: int = None) -> dict:
+        friend_ids = self.get_friend_ids(steam_id, relationship=relationship)
+        if limit is not None:
+            friend_ids = friend_ids[: int(limit)]
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "friend_ids": friend_ids,
+            "friends": self.get_player_summaries(friend_ids) if friend_ids else [],
+        }
+
     def get_player_bans(self, steam_ids) -> list:
         response = self.transport.request(
             "GET",
@@ -195,6 +205,29 @@ class UsersService:
             require_api_key=True,
         )
         return response.get("players", [])
+
+    @staticmethod
+    def _normalize_player_ban(entry: dict) -> dict:
+        return {
+            "steamid": entry.get("SteamId") or entry.get("steamid"),
+            "community_banned": entry.get("CommunityBanned"),
+            "vac_banned": entry.get("VACBanned"),
+            "number_of_vac_bans": entry.get("NumberOfVACBans"),
+            "days_since_last_ban": entry.get("DaysSinceLastBan"),
+            "number_of_game_bans": entry.get("NumberOfGameBans"),
+            "economy_ban": entry.get("EconomyBan"),
+            "raw": entry,
+        }
+
+    def get_player_bans_summary(self, steam_ids) -> list:
+        return [self._normalize_player_ban(entry) for entry in self.get_player_bans(steam_ids)]
+
+    def get_player_bans_map(self, steam_ids) -> dict:
+        return {
+            entry["steamid"]: entry
+            for entry in self.get_player_bans_summary(steam_ids)
+            if entry.get("steamid")
+        }
 
     def get_user_group_list(self, steam_id) -> dict:
         return self.transport.request(

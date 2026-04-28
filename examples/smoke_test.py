@@ -104,6 +104,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Friend Summaries",
+        lambda: _format_friend_summaries(
+            client.get_friend_summaries_for_user(args.profile_identifier, limit=5)
+        ),
+    )
+    run_check(
         "Get User Group List",
         lambda: "groups={0}".format(
             len(client.get_user_group_list_for_user(args.profile_identifier).get("groups", []))
@@ -122,6 +128,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Player Bans Summary",
+        lambda: _format_player_bans_summary(
+            client.get_player_bans_summary(client.get_friend_ids_for_user(args.profile_identifier)[:5])
+        ),
+    )
+    run_check(
         "Get Owned Games",
         lambda: _format_optional_count(
             client.get_owned_games_for_user(args.profile_identifier, include_appinfo=False),
@@ -129,10 +141,22 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Owned Games Summary",
+        lambda: _format_game_summary(
+            client.get_owned_games_summary_for_user(args.profile_identifier, include_appinfo=True)
+        ),
+    )
+    run_check(
         "Get Recently Played Games",
         lambda: _format_optional_count(
             client.get_recently_played_games_for_user(args.profile_identifier),
             "total_count",
+        ),
+    )
+    run_check(
+        "Get Recently Played Games Summary",
+        lambda: _format_game_summary(
+            client.get_recently_played_games_summary_for_user(args.profile_identifier)
         ),
     )
     run_check(
@@ -164,6 +188,10 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: _format_app_details(client.get_app_details(args.app_id)),
     )
     run_check(
+        "Get App Details Many",
+        lambda: _format_app_details_many(client.get_app_details_many([args.app_id, 730])),
+    )
+    run_check(
         "Get News For App",
         lambda: "newsitems={0}".format(
             len(client.news.get_news_for_app(args.app_id, count=1).get("appnews", {}).get("newsitems", []))
@@ -186,6 +214,10 @@ def run_public_suite(client: SteamClient, args) -> None:
                 ).get("achievements", [])
             )
         ),
+    )
+    run_check(
+        "Get Global Achievement Percentages Map",
+        lambda: _format_global_achievement_map(client.get_global_achievement_percentages_map(args.app_id)),
     )
     run_check(
         "Get Schema For Game",
@@ -487,6 +519,10 @@ def run_community_suite(client: SteamClient, args) -> None:
         lambda: "members={0}".format(len(client.groups.get_group_members(args.group_url).get("members", []))),
     )
     run_check(
+        "Get Group Member Summaries",
+        lambda: _format_group_member_summaries(client.get_group_member_summaries(args.group_url, limit=5)),
+    )
+    run_check(
         "Community Cookie Export/Import Roundtrip",
         lambda: _format_cookie_roundtrip(client, args),
     )
@@ -617,6 +653,45 @@ def _format_store_app_search(payload: dict) -> str:
     matches = payload.get("matches", [])
     first_name = matches[0]["name"] if matches else "<none>"
     return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
+def _format_friend_summaries(payload: dict) -> str:
+    friends = payload.get("friends", [])
+    first_name = friends[0]["personaname"] if friends else "<none>"
+    return "friends={0} first={1}".format(len(friends), first_name)
+
+
+def _format_player_bans_summary(payload: list) -> str:
+    vac_banned = sum(1 for item in payload if item.get("vac_banned"))
+    return "players={0} vac_banned={1}".format(len(payload), vac_banned)
+
+
+def _format_game_summary(payload: dict) -> str:
+    games = payload.get("games", [])
+    first_name = games[0].get("name") if games and games[0].get("name") else "<none>"
+    count = payload.get("game_count")
+    if count is None:
+        count = payload.get("total_count")
+    if count is None:
+        count = "unavailable"
+    return "count={0} first={1}".format(count, first_name)
+
+
+def _format_app_details_many(payload: list) -> str:
+    first_name = payload[0].get("name") if payload else "<none>"
+    return "apps={0} first={1}".format(len(payload), first_name)
+
+
+def _format_global_achievement_map(payload: dict) -> str:
+    achievements = payload.get("achievements", [])
+    first_name = achievements[0].get("name") if achievements else "<none>"
+    return "achievements={0} first={1}".format(payload.get("achievement_count"), first_name)
+
+
+def _format_group_member_summaries(payload: dict) -> str:
+    members = payload.get("members", [])
+    first_name = members[0].get("personaname") if members else "<none>"
+    return "members={0} first={1}".format(len(members), first_name)
 
 
 def _format_market_orders_summary(payload: dict) -> str:

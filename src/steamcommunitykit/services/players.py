@@ -80,3 +80,68 @@ class PlayersService:
             params={"steamid": validate_steam_id(steam_id), "badgeid": int(badge_id)},
             require_api_key=True,
         )
+
+    @staticmethod
+    def _normalize_game_entry(game: dict) -> dict:
+        return {
+            "app_id": game.get("appid"),
+            "name": game.get("name"),
+            "playtime_forever": game.get("playtime_forever"),
+            "playtime_windows_forever": game.get("playtime_windows_forever"),
+            "playtime_mac_forever": game.get("playtime_mac_forever"),
+            "playtime_linux_forever": game.get("playtime_linux_forever"),
+            "playtime_2weeks": game.get("playtime_2weeks"),
+            "img_icon_url": game.get("img_icon_url"),
+            "img_logo_url": game.get("img_logo_url"),
+            "has_community_visible_stats": game.get("has_community_visible_stats"),
+            "content_descriptorids": game.get("content_descriptorids", []),
+            "sort_as": game.get("sort_as"),
+            "capsule_filename": game.get("capsule_filename"),
+            "raw": game,
+        }
+
+    def get_owned_games_summary(
+        self,
+        steam_id,
+        *,
+        include_appinfo: bool = True,
+        include_played_free_games: bool = False,
+        appids_filter: Optional[List[int]] = None,
+        language: Optional[str] = None,
+    ) -> dict:
+        payload = self.get_owned_games(
+            steam_id,
+            include_appinfo=include_appinfo,
+            include_played_free_games=include_played_free_games,
+            appids_filter=appids_filter,
+            language=language,
+        )
+        games = payload.get("games", [])
+        normalized_games = [self._normalize_game_entry(game) for game in games]
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "game_count": payload.get("game_count", len(normalized_games)),
+            "games": normalized_games,
+            "games_map": {
+                game["app_id"]: game
+                for game in normalized_games
+                if game.get("app_id") is not None
+            },
+            "raw": payload,
+        }
+
+    def get_recently_played_games_summary(self, steam_id, count: int = 0) -> dict:
+        payload = self.get_recently_played_games(steam_id, count=count)
+        games = payload.get("games", [])
+        normalized_games = [self._normalize_game_entry(game) for game in games]
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "total_count": payload.get("total_count", len(normalized_games)),
+            "games": normalized_games,
+            "games_map": {
+                game["app_id"]: game
+                for game in normalized_games
+                if game.get("app_id") is not None
+            },
+            "raw": payload,
+        }

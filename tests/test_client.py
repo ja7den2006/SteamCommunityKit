@@ -425,6 +425,70 @@ def test_users_get_player_summaries_map_returns_steamid_keyed_mapping() -> None:
     client.close()
 
 
+def test_users_get_friend_summaries_returns_limited_player_summaries() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "friendslist": {
+                        "friends": [
+                            {"steamid": "76561197960435530"},
+                            {"steamid": "76561197960287930"},
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.users.get_friend_summaries("76561197960434622", limit=1)
+
+    assert result["friend_ids"] == ["76561197960435530"]
+    assert result["friends"][0]["personaname"] == "Robin"
+    client.close()
+
+
+def test_users_get_player_bans_summary_and_map_normalize_fields() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "players": [
+                        {
+                            "SteamId": "76561197960435530",
+                            "CommunityBanned": False,
+                            "VACBanned": True,
+                            "NumberOfVACBans": 1,
+                            "DaysSinceLastBan": 25,
+                            "NumberOfGameBans": 0,
+                            "EconomyBan": "none",
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    summary = client.users.get_player_bans_summary(["76561197960435530"])
+    mapping = client.users.get_player_bans_map(["76561197960435530"])
+
+    assert summary[0]["steamid"] == "76561197960435530"
+    assert summary[0]["vac_banned"] is True
+    assert mapping["76561197960435530"]["days_since_last_ban"] == 25
+    client.close()
+
+
 def test_apps_service_uses_public_servers_at_address_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"servers": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -1125,6 +1189,61 @@ def test_client_can_get_owned_games_for_user_from_vanity_identifier() -> None:
     client.close()
 
 
+def test_players_get_owned_games_summary_normalizes_games() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "game_count": 1,
+                    "games": [
+                        {
+                            "appid": 570,
+                            "name": "Dota 2",
+                            "playtime_forever": 1234,
+                            "img_icon_url": "icon",
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.players.get_owned_games_summary("76561197960434622")
+
+    assert result["game_count"] == 1
+    assert result["games"][0]["app_id"] == 570
+    assert result["games_map"][570]["name"] == "Dota 2"
+    client.close()
+
+
+def test_players_get_recently_played_games_summary_normalizes_games() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "total_count": 1,
+                    "games": [
+                        {
+                            "appid": 730,
+                            "name": "Counter-Strike 2",
+                            "playtime_2weeks": 120,
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.players.get_recently_played_games_summary("76561197960434622")
+
+    assert result["total_count"] == 1
+    assert result["games"][0]["app_id"] == 730
+    assert result["games_map"][730]["playtime_2weeks"] == 120
+    client.close()
+
+
 def test_inventory_service_uses_community_inventory_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"assets": [], "descriptions": [], "total_inventory_count": 0}))
     client = SteamClient(session=session)
@@ -1579,6 +1698,57 @@ def test_client_can_get_user_group_ids_for_user_from_profile_url() -> None:
     result = client.get_user_group_ids_for_user("https://steamcommunity.com/profiles/76561197960434622/")
 
     assert result == ["103582791429521412", "103582791429521413"]
+    client.close()
+
+
+def test_client_can_get_friend_summaries_for_user_from_profile_url() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "friendslist": {
+                        "friends": [
+                            {"steamid": "76561197960435530"},
+                            {"steamid": "76561197960287930"},
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"},
+                            {"steamid": "76561197960287930", "personaname": "John"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_friend_summaries_for_user("https://steamcommunity.com/profiles/76561197960434622/", limit=2)
+
+    assert len(result["friends"]) == 2
+    assert result["friends"][1]["personaname"] == "John"
+    client.close()
+
+
+def test_apps_get_app_details_many_returns_multiple_items() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={"570": {"success": True, "data": {"name": "Dota 2", "type": "game"}}}),
+            DummyResponse(json_data={"730": {"success": True, "data": {"name": "Counter-Strike 2", "type": "game"}}}),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_app_details_many([570, 730])
+
+    assert len(result) == 2
+    assert result[0]["name"] == "Dota 2"
+    assert result[1]["name"] == "Counter-Strike 2"
     client.close()
 
 
@@ -2147,6 +2317,145 @@ def test_client_can_get_all_group_members_without_login() -> None:
 
     assert result["pages_fetched"] == 1
     assert result["members"] == ["1", "2"]
+    client.close()
+
+
+def test_user_stats_global_achievement_percentages_map_normalizes_entries() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "achievementpercentages": {
+                    "achievements": [
+                        {"name": "FIRST_BLOOD", "percent": 12.5},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_global_achievement_percentages_map(570)
+
+    assert result["achievement_count"] == 1
+    assert result["achievements_map"]["FIRST_BLOOD"]["percent"] == 12.5
+    client.close()
+
+
+def test_user_stats_player_achievements_summary_normalizes_progress() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "playerstats": {
+                    "steamID": "76561197960434622",
+                    "gameName": "Dota 2",
+                    "achievements": [
+                        {"apiname": "WIN_ONE", "achieved": 1, "unlocktime": 100, "name": "Winner"},
+                        {"apiname": "WIN_TEN", "achieved": 0, "unlocktime": 0, "name": "Veteran"},
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_player_achievements_summary_for_user("76561197960434622", 570)
+
+    assert result["game_name"] == "Dota 2"
+    assert result["achievement_count"] == 2
+    assert result["achieved_count"] == 1
+    assert result["completion_percentage"] == 50.0
+    client.close()
+
+
+def test_groups_get_group_member_summaries_combines_member_ids_with_player_summaries() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>2</memberCount>
+                  <totalPages>1</totalPages>
+                  <currentPage>1</currentPage>
+                  <members>
+                    <steamID64>76561197960435530</steamID64>
+                    <steamID64>76561197960287930</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.groups.get_group_member_summaries("Valve", limit=1)
+
+    assert result["member_ids"] == ["76561197960435530"]
+    assert result["members"][0]["personaname"] == "Robin"
+    client.close()
+
+
+def test_groups_get_all_group_member_summaries_combines_aggregated_members_with_player_summaries() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>3</memberCount>
+                  <totalPages>2</totalPages>
+                  <currentPage>1</currentPage>
+                  <members>
+                    <steamID64>76561197960435530</steamID64>
+                    <steamID64>76561197960287930</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>3</memberCount>
+                  <totalPages>2</totalPages>
+                  <currentPage>2</currentPage>
+                  <members>
+                    <steamID64>76561198000000000</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"},
+                            {"steamid": "76561197960287930", "personaname": "John"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_all_group_member_summaries("Valve", max_pages=2, max_members=2)
+
+    assert result["pages_fetched"] == 2
+    assert result["member_ids"] == ["76561197960435530", "76561197960287930"]
+    assert len(result["members"]) == 2
     client.close()
 
 

@@ -26,6 +26,28 @@ class UserStatsService:
             params={"gameid": validate_app_id(app_id)},
         )
 
+    def get_global_achievement_percentages_map(self, app_id) -> dict:
+        payload = self.get_global_achievement_percentages_for_app(app_id)
+        achievements = payload.get("achievementpercentages", {}).get("achievements", [])
+        normalized = []
+        mapping = {}
+        for entry in achievements:
+            item = {
+                "name": entry.get("name"),
+                "percent": entry.get("percent"),
+                "raw": entry,
+            }
+            normalized.append(item)
+            if item.get("name"):
+                mapping[item["name"]] = item
+        return {
+            "app_id": validate_app_id(app_id),
+            "achievement_count": len(normalized),
+            "achievements": normalized,
+            "achievements_map": mapping,
+            "raw": payload,
+        }
+
     def get_player_achievements(
         self, steam_id, app_id, language: Optional[str] = None
     ) -> dict:
@@ -88,3 +110,43 @@ class UserStatsService:
             params=params,
             require_api_key=True,
         )
+
+    def get_player_achievements_summary(
+        self, steam_id, app_id, language: Optional[str] = None
+    ) -> dict:
+        payload = self.get_player_achievements(steam_id, app_id, language=language)
+        playerstats = payload.get("playerstats", {})
+        achievements = playerstats.get("achievements", [])
+        normalized = []
+        achieved_count = 0
+        for entry in achievements:
+            achieved = bool(entry.get("achieved"))
+            if achieved:
+                achieved_count += 1
+            normalized.append(
+                {
+                    "api_name": entry.get("apiname"),
+                    "achieved": achieved,
+                    "unlock_time": entry.get("unlocktime"),
+                    "name": entry.get("name"),
+                    "description": entry.get("description"),
+                    "icon": entry.get("icon"),
+                    "icongray": entry.get("icongray"),
+                    "hidden": entry.get("hidden"),
+                    "raw": entry,
+                }
+            )
+        total_count = len(normalized)
+        completion_percentage = 0.0
+        if total_count:
+            completion_percentage = round((achieved_count / total_count) * 100.0, 2)
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "app_id": validate_app_id(app_id),
+            "game_name": playerstats.get("gameName"),
+            "achievement_count": total_count,
+            "achieved_count": achieved_count,
+            "completion_percentage": completion_percentage,
+            "achievements": normalized,
+            "raw": payload,
+        }

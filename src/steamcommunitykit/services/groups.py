@@ -236,6 +236,51 @@ class GroupsService:
             "raw": pages[-1] if pages else {},
         }
 
+    def get_group_member_summaries(self, group_url: str, *, page: int = 1, limit: Optional[int] = None) -> dict:
+        from steamcommunitykit.services.users import UsersService
+
+        payload = self.get_group_members(group_url, page=page)
+        member_ids = payload.get("members", [])
+        if limit is not None:
+            member_ids = member_ids[: int(limit)]
+        users = UsersService(self.transport)
+        return {
+            "group_id64": payload.get("group_id64"),
+            "group_url": payload.get("group_url"),
+            "current_page": payload.get("current_page"),
+            "total_pages": payload.get("total_pages"),
+            "member_count": payload.get("member_count"),
+            "member_ids": member_ids,
+            "members": users.get_player_summaries(member_ids) if member_ids else [],
+            "raw": payload,
+        }
+
+    def get_all_group_member_summaries(
+        self,
+        group_url: str,
+        *,
+        start_page: int = 1,
+        max_pages: Optional[int] = None,
+        max_members: Optional[int] = None,
+    ) -> dict:
+        from steamcommunitykit.services.users import UsersService
+
+        payload = self.get_all_group_members(group_url, start_page=start_page, max_pages=max_pages)
+        member_ids = payload.get("members", [])
+        if max_members is not None:
+            member_ids = member_ids[: int(max_members)]
+        users = UsersService(self.transport)
+        return {
+            "group_id64": payload.get("group_id64"),
+            "group_url": payload.get("group_url"),
+            "member_count": payload.get("member_count"),
+            "pages_fetched": payload.get("pages_fetched"),
+            "total_pages": payload.get("total_pages"),
+            "member_ids": member_ids,
+            "members": users.get_player_summaries(member_ids) if member_ids else [],
+            "raw": payload,
+        }
+
     def create_group(
         self,
         *,

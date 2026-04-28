@@ -98,6 +98,13 @@ class SteamClient:
             relationship=relationship,
         )
 
+    def get_friend_summaries_for_user(self, identifier, relationship: str = "friend", limit: int = None, url_type=None) -> dict:
+        return self.users.get_friend_summaries(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            relationship=relationship,
+            limit=limit,
+        )
+
     def get_user_group_list_for_user(self, identifier, url_type=None) -> dict:
         return self.users.get_user_group_list(
             self.resolve_steam_id(identifier, url_type=url_type),
@@ -108,14 +115,40 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
         )
 
+    def get_player_bans_summary(self, identifiers, url_type=None) -> list:
+        if url_type is None:
+            normalized = [self.resolve_steam_id(identifier) for identifier in identifiers]
+        else:
+            normalized = [self.resolve_steam_id(identifier, url_type=url_type) for identifier in identifiers]
+        return self.users.get_player_bans_summary(normalized)
+
+    def get_player_bans_map(self, identifiers, url_type=None) -> dict:
+        if url_type is None:
+            normalized = [self.resolve_steam_id(identifier) for identifier in identifiers]
+        else:
+            normalized = [self.resolve_steam_id(identifier, url_type=url_type) for identifier in identifiers]
+        return self.users.get_player_bans_map(normalized)
+
     def get_owned_games_for_user(self, identifier, url_type=None, **kwargs) -> dict:
         return self.players.get_owned_games(
             self.resolve_steam_id(identifier, url_type=url_type),
             **kwargs,
         )
 
+    def get_owned_games_summary_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.get_owned_games_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
     def get_recently_played_games_for_user(self, identifier, url_type=None, **kwargs) -> dict:
         return self.players.get_recently_played_games(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
+    def get_recently_played_games_summary_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.get_recently_played_games_summary(
             self.resolve_steam_id(identifier, url_type=url_type),
             **kwargs,
         )
@@ -154,6 +187,24 @@ class SteamClient:
     def get_all_group_members(self, group_url: str, *, start_page: int = 1, max_pages: Optional[int] = None) -> dict:
         return self.groups.get_all_group_members(group_url, start_page=start_page, max_pages=max_pages)
 
+    def get_group_member_summaries(self, group_url: str, *, page: int = 1, limit: Optional[int] = None) -> dict:
+        return self.groups.get_group_member_summaries(group_url, page=page, limit=limit)
+
+    def get_all_group_member_summaries(
+        self,
+        group_url: str,
+        *,
+        start_page: int = 1,
+        max_pages: Optional[int] = None,
+        max_members: Optional[int] = None,
+    ) -> dict:
+        return self.groups.get_all_group_member_summaries(
+            group_url,
+            start_page=start_page,
+            max_pages=max_pages,
+            max_members=max_members,
+        )
+
     def get_published_file_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_published_file_detail(published_file_id)
 
@@ -185,6 +236,38 @@ class SteamClient:
 
     def get_news_summary(self, app_id, **kwargs) -> dict:
         return self.news.get_news_summary(app_id, **kwargs)
+
+    def get_app_details_many(
+        self,
+        app_ids,
+        *,
+        language: str = "english",
+        country: str = "US",
+        filters: str = "",
+    ) -> list:
+        return self.apps.get_app_details_many(
+            app_ids,
+            language=language,
+            country=country,
+            filters=filters,
+        )
+
+    def get_global_achievement_percentages_map(self, app_id) -> dict:
+        return self.user_stats.get_global_achievement_percentages_map(app_id)
+
+    def get_player_achievements_summary_for_user(
+        self,
+        identifier,
+        app_id,
+        *,
+        language: Optional[str] = None,
+        url_type=None,
+    ) -> dict:
+        return self.user_stats.get_player_achievements_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            language=language,
+        )
 
     def get_inventory_for_user(
         self,
