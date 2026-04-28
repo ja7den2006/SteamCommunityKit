@@ -93,14 +93,16 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Owned Games",
-        lambda: "game_count={0}".format(
-            client.get_owned_games_for_user(args.profile_identifier, include_appinfo=False).get("game_count", 0)
+        lambda: _format_optional_count(
+            client.get_owned_games_for_user(args.profile_identifier, include_appinfo=False),
+            "game_count",
         ),
     )
     run_check(
         "Get Recently Played Games",
-        lambda: "total_count={0}".format(
-            client.get_recently_played_games_for_user(args.profile_identifier).get("total_count", 0)
+        lambda: _format_optional_count(
+            client.get_recently_played_games_for_user(args.profile_identifier),
+            "total_count",
         ),
     )
     run_check(
@@ -129,7 +131,9 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get News For App",
-        lambda: "newsitems={0}".format(len(client.news.get_news_for_app(args.app_id, count=1).get("newsitems", []))),
+        lambda: "newsitems={0}".format(
+            len(client.news.get_news_for_app(args.app_id, count=1).get("appnews", {}).get("newsitems", []))
+        ),
     )
     run_check(
         "Get Number Of Current Players",
@@ -140,15 +144,15 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: "achievements={0}".format(
             len(
                 client.user_stats.get_global_achievement_percentages_for_app(args.app_id).get(
-                    "achievements", []
-                )
+                    "achievementpercentages", {}
+                ).get("achievements", [])
             )
         ),
     )
     run_check(
         "Get Schema For Game",
         lambda: "gameName={0}".format(
-            client.user_stats.get_schema_for_game(args.app_id).get("gameName", "<unknown>")
+            client.user_stats.get_schema_for_game(args.app_id).get("game", {}).get("gameName", "<unknown>")
         ),
     )
     run_check(
@@ -203,8 +207,8 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Store App List",
-        lambda: "items={0}".format(
-            len(client.store.get_app_list(include_games=True).get("items", []))
+        lambda: "apps={0}".format(
+            len(client.store.get_app_list(include_games=True).get("apps", []))
         ),
     )
     run_check(
@@ -238,7 +242,7 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Supported API List",
         lambda: "interfaces={0}".format(
-            len(client.webapi_util.get_supported_api_list().get("interfaces", []))
+            len(client.webapi_util.get_supported_api_list().get("apilist", {}).get("interfaces", []))
         ),
     )
 
@@ -255,7 +259,11 @@ def run_public_suite(client: SteamClient, args) -> None:
         run_check(
             "Get News For App Authed",
             lambda: "newsitems={0}".format(
-                len(client.news.get_news_for_app_authed(args.app_id, count=1).get("newsitems", []))
+                len(
+                    client.news.get_news_for_app_authed(args.app_id, count=1).get(
+                        "appnews", {}
+                    ).get("newsitems", [])
+                )
             ),
         )
         run_check(
@@ -353,6 +361,13 @@ def run_community_suite(client: SteamClient, args) -> None:
             "Write Check: Rotate Trade URL",
             lambda: str(client.community.rotate_trade_offer_url()),
         )
+
+
+def _format_optional_count(payload: dict, key: str) -> str:
+    value = payload.get(key)
+    if value is None:
+        return "{0}=unavailable".format(key)
+    return "{0}={1}".format(key, value)
 
 
 def parse_args() -> argparse.Namespace:
