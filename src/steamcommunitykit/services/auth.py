@@ -182,6 +182,7 @@ class AuthenticationService:
             password,
             persistence=persistence,
         )
+        self._validate_begin_login_response(started)
         client_id = int(started["client_id"])
         request_id = str(started["request_id"])
         steam_id = str(started["steamid"])
@@ -236,6 +237,18 @@ class AuthenticationService:
     @staticmethod
     def _has_auth_tokens(payload: dict) -> bool:
         return bool(payload.get("access_token") and payload.get("refresh_token"))
+
+    @staticmethod
+    def _validate_begin_login_response(payload: dict) -> None:
+        required_fields = ("client_id", "request_id", "steamid")
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+        if not missing_fields:
+            return
+        raise SteamAuthenticationError(
+            AuthenticationService._extract_begin_login_failure_message(payload),
+            status_code=401,
+            payload=payload,
+        )
 
     def _poll_for_tokens(
         self,
@@ -303,6 +316,14 @@ class AuthenticationService:
         if payload.get("had_remote_interaction"):
             return "Steam login was not completed after remote interaction."
         return "Steam login did not return access tokens."
+
+    @staticmethod
+    def _extract_begin_login_failure_message(payload: dict) -> str:
+        for key in ("message", "error", "extended_error_message"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return "Your credentials are incorrect or the Steam account is unable to login."
 
     def community_credentials_from_login(self, login_result: CredentialLoginResult) -> CommunityCredentials:
         session_id = self.create_session_id()

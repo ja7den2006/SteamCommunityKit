@@ -751,6 +751,22 @@ def test_auth_login_with_credentials_raises_clear_error_when_guard_code_missing(
     client.close()
 
 
+def test_auth_login_with_credentials_raises_clear_error_when_begin_response_is_incomplete() -> None:
+    client = SteamClient(api_key="test")
+
+    original_begin = client.auth.begin_auth_session_via_credentials
+    client.auth.begin_auth_session_via_credentials = lambda *args, **kwargs: {"interval": 1}
+
+    with pytest.raises(
+        SteamAuthenticationError,
+        match="Your credentials are incorrect or the Steam account is unable to login",
+    ):
+        client.auth.login_with_credentials("tester", "secret")
+
+    client.auth.begin_auth_session_via_credentials = original_begin
+    client.close()
+
+
 def test_community_edit_profile_posts_profile_save_payload() -> None:
     session = RecordingSession(DummyResponse(json_data={"success": 1}))
     client = SteamClient(api_key="test", session=session)
