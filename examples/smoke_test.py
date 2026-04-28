@@ -98,9 +98,27 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Friend IDs",
+        lambda: "friend_ids={0}".format(
+            len(client.get_friend_ids_for_user(args.profile_identifier))
+        ),
+    )
+    run_check(
         "Get User Group List",
         lambda: "groups={0}".format(
             len(client.get_user_group_list_for_user(args.profile_identifier).get("groups", []))
+        ),
+    )
+    run_check(
+        "Get User Group IDs",
+        lambda: "group_ids={0}".format(
+            len(client.get_user_group_ids_for_user(args.profile_identifier))
+        ),
+    )
+    run_check(
+        "Get Player Summaries Map",
+        lambda: "mapped_players={0}".format(
+            len(client.get_player_summaries_map([args.steam_id, client.resolve_steam_id(args.vanity)]))
         ),
     )
     run_check(

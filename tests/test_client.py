@@ -403,6 +403,28 @@ def test_users_get_player_summaries_fall_back_to_community_xml_without_api_key()
     client.close()
 
 
+def test_users_get_player_summaries_map_returns_steamid_keyed_mapping() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "players": [
+                        {"steamid": "76561197960435530", "personaname": "Robin"},
+                        {"steamid": "76561197960287930", "personaname": "John"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.users.get_player_summaries_map(["76561197960435530", "76561197960287930"])
+
+    assert result["76561197960435530"]["personaname"] == "Robin"
+    assert result["76561197960287930"]["personaname"] == "John"
+    client.close()
+
+
 def test_apps_service_uses_public_servers_at_address_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"servers": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -1515,6 +1537,48 @@ def test_client_can_get_friend_list_for_user_from_profile_url() -> None:
     assert friends["friendslist"]["friends"][0]["steamid"] == "76561197960435530"
     call = session.calls[0]
     assert call["params"]["steamid"] == "76561197960434622"
+    client.close()
+
+
+def test_client_can_get_friend_ids_for_user_from_profile_url() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "friendslist": {
+                    "friends": [
+                        {"steamid": "76561197960435530"},
+                        {"steamid": "76561197960287930"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_friend_ids_for_user("https://steamcommunity.com/profiles/76561197960434622/")
+
+    assert result == ["76561197960435530", "76561197960287930"]
+    client.close()
+
+
+def test_client_can_get_user_group_ids_for_user_from_profile_url() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "groups": [
+                        {"gid": "103582791429521412"},
+                        {"gid": "103582791429521413"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_user_group_ids_for_user("https://steamcommunity.com/profiles/76561197960434622/")
+
+    assert result == ["103582791429521412", "103582791429521413"]
     client.close()
 
 

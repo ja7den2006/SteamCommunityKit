@@ -164,6 +164,13 @@ class UsersService:
             players.extend(response.get("players", []))
         return players
 
+    def get_player_summaries_map(self, steam_ids) -> dict:
+        return {
+            str(player.get("steamid")): player
+            for player in self.get_player_summaries(steam_ids)
+            if player.get("steamid")
+        }
+
     def get_friend_list(self, steam_id, relationship: str = "friend") -> dict:
         return self.transport.request(
             "GET",
@@ -174,6 +181,11 @@ class UsersService:
             },
             require_api_key=True,
         )
+
+    def get_friend_ids(self, steam_id, relationship: str = "friend") -> list:
+        payload = self.get_friend_list(steam_id, relationship=relationship)
+        friends = payload.get("friendslist", {}).get("friends", [])
+        return [friend.get("steamid") for friend in friends if friend.get("steamid")]
 
     def get_player_bans(self, steam_ids) -> list:
         response = self.transport.request(
@@ -191,3 +203,8 @@ class UsersService:
             params={"steamid": validate_steam_id(steam_id)},
             require_api_key=True,
         )
+
+    def get_user_group_ids(self, steam_id) -> list:
+        payload = self.get_user_group_list(steam_id)
+        groups = payload.get("groups", [])
+        return [group.get("gid") for group in groups if group.get("gid")]

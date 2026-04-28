@@ -79,14 +79,32 @@ class SteamClient:
     def get_player_summary(self, identifier, url_type=None) -> dict:
         return self.users.get_player_summary(identifier, url_type=url_type)
 
+    def get_player_summaries_map(self, identifiers, url_type=None) -> dict:
+        if url_type is None:
+            normalized = [self.resolve_steam_id(identifier) for identifier in identifiers]
+        else:
+            normalized = [self.resolve_steam_id(identifier, url_type=url_type) for identifier in identifiers]
+        return self.users.get_player_summaries_map(normalized)
+
     def get_friend_list_for_user(self, identifier, relationship: str = "friend", url_type=None) -> dict:
         return self.users.get_friend_list(
             self.resolve_steam_id(identifier, url_type=url_type),
             relationship=relationship,
         )
 
+    def get_friend_ids_for_user(self, identifier, relationship: str = "friend", url_type=None) -> list:
+        return self.users.get_friend_ids(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            relationship=relationship,
+        )
+
     def get_user_group_list_for_user(self, identifier, url_type=None) -> dict:
         return self.users.get_user_group_list(
+            self.resolve_steam_id(identifier, url_type=url_type),
+        )
+
+    def get_user_group_ids_for_user(self, identifier, url_type=None) -> list:
+        return self.users.get_user_group_ids(
             self.resolve_steam_id(identifier, url_type=url_type),
         )
 
