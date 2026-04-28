@@ -916,6 +916,80 @@ def test_remote_storage_get_published_file_detail_raises_for_invalid_result() ->
     client.close()
 
 
+def test_remote_storage_get_collection_detail_normalizes_children() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "collectiondetails": [
+                        {
+                            "publishedfileid": "2682416130",
+                            "result": 1,
+                            "childcount": 2,
+                            "children": [
+                                {"publishedfileid": "111"},
+                                {"publishedfileid": "222"},
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_collection_detail("2682416130")
+
+    assert result["published_file_id"] == "2682416130"
+    assert result["child_count"] == 2
+    assert result["child_ids"] == ["111", "222"]
+    client.close()
+
+
+def test_remote_storage_get_collection_child_details_expands_children() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "collectiondetails": [
+                            {
+                                "publishedfileid": "2682416130",
+                                "result": 1,
+                                "childcount": 1,
+                                "children": [{"publishedfileid": "111"}],
+                            }
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "publishedfiledetails": [
+                            {
+                                "publishedfileid": "111",
+                                "result": 1,
+                                "title": "Child Item",
+                                "consumer_appid": 570,
+                                "subscriptions": 10,
+                            }
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_collection_child_details("2682416130")
+
+    assert result["collection"]["published_file_id"] == "2682416130"
+    assert result["child_ids"] == ["111"]
+    assert result["children"][0]["title"] == "Child Item"
+    client.close()
+
+
 def test_remote_storage_get_ugc_file_details_requires_app_id() -> None:
     session = RecordingSession(DummyResponse(json_data={"data": {"filename": "example"}}))
     client = SteamClient(api_key="test", session=session)
@@ -1535,6 +1609,59 @@ def test_market_item_listings_uses_listings_render_endpoint() -> None:
     assert call["params"]["language"] == "english"
     assert call["params"]["currency"] == 1
     assert result["success"] is True
+    client.close()
+
+
+def test_market_get_item_listings_summary_normalizes_assets_and_cheapest_listing() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": 1,
+                "total_count": 2,
+                "start": 0,
+                "pagesize": 2,
+                "assets": {
+                    "730": {
+                        "2": {
+                            "1001": {
+                                "appid": 730,
+                                "contextid": "2",
+                                "id": "1001",
+                                "classid": "10",
+                                "instanceid": "0",
+                                "amount": "1",
+                                "market_hash_name": "AK-47 | Example",
+                            }
+                        }
+                    }
+                },
+                "listinginfo": {
+                    "1": {
+                        "price": 123,
+                        "fee": 12,
+                        "converted_price": 123,
+                        "converted_fee": 12,
+                        "asset": {"id": "1001"},
+                    },
+                    "2": {
+                        "price": 150,
+                        "fee": 15,
+                        "converted_price": 150,
+                        "converted_fee": 15,
+                        "asset": {"id": "1001"},
+                    },
+                },
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_market_item_listings_summary(730, "AK-47 | Example", count=2)
+
+    assert result["total_count"] == 2
+    assert len(result["listings"]) == 2
+    assert result["cheapest_listing"]["listing_id"] == "1"
+    assert result["assets"]["1001"]["market_hash_name"] == "AK-47 | Example"
     client.close()
 
 

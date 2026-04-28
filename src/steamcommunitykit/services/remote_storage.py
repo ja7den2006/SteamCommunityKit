@@ -23,6 +23,19 @@ class RemoteStorageService:
         )
 
     @staticmethod
+    def normalize_collection_detail(detail: dict) -> dict:
+        children = detail.get("children") or []
+        child_ids = [child.get("publishedfileid") for child in children if child.get("publishedfileid")]
+        return {
+            "published_file_id": detail.get("publishedfileid"),
+            "result": detail.get("result"),
+            "child_count": detail.get("childcount", len(child_ids)),
+            "children": children,
+            "child_ids": child_ids,
+            "raw": detail,
+        }
+
+    @staticmethod
     def normalize_published_file_detail(detail: dict) -> dict:
         published_file_id = detail.get("publishedfileid")
         app_id = detail.get("consumer_appid") or detail.get("consumer_app_id")
@@ -73,6 +86,50 @@ class RemoteStorageService:
             f"{self.base_url}/GetPublishedFileDetails/v1/",
             data=data,
         )
+
+    def get_collection_details_summary(self, published_file_ids) -> dict:
+        payload = self.get_collection_details(published_file_ids)
+        details = payload.get("collectiondetails", [])
+        normalized = [self.normalize_collection_detail(detail) for detail in details]
+        return {
+            "collections": normalized,
+            "collection_ids": [detail.get("published_file_id") for detail in normalized if detail.get("published_file_id")],
+            "raw": payload,
+        }
+
+    def get_collection_detail(self, published_file_id) -> dict:
+        details = self.get_collection_details_summary([published_file_id]).get("collections", [])
+        if not details:
+            raise SteamNotFoundError(
+                "Steam did not return a collection detail for the requested id.",
+                status_code=404,
+                payload={"published_file_id": str(published_file_id)},
+            )
+        first = details[0]
+        if int(first.get("result", 0) or 0) != 1:
+            raise SteamNotFoundError(
+                "Steam did not return a valid collection detail for the requested id.",
+                status_code=404,
+                payload=first,
+            )
+        return first
+
+    def get_collection_child_details(self, published_file_id) -> dict:
+        collection = self.get_collection_detail(published_file_id)
+        child_ids = collection.get("child_ids", [])
+        children = []
+        if child_ids:
+            details = self.get_published_file_details(child_ids).get("publishedfiledetails", [])
+            children = [
+                self.normalize_published_file_detail(detail)
+                for detail in details
+                if int(detail.get("result", 0) or 0) == 1
+            ]
+        return {
+            "collection": collection,
+            "child_ids": child_ids,
+            "children": children,
+        }
 
     def get_published_file_detail(self, published_file_id) -> dict:
         detail = self.get_published_file_details([published_file_id]).get("publishedfiledetails", [])

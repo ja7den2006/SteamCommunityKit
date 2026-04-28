@@ -215,6 +215,73 @@ class MarketService:
             },
         )
 
+    def get_item_listings_summary(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        payload = self.get_item_listings(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        assets = payload.get("assets") or {}
+        listinginfo = payload.get("listinginfo") or {}
+
+        asset_map = {}
+        for app_assets in assets.values():
+            for context_assets in app_assets.values():
+                for asset_id, asset in context_assets.items():
+                    item = dict(asset)
+                    item["asset_id"] = asset_id
+                    asset_map[str(asset_id)] = item
+
+        listings = []
+        for listing_id, listing in listinginfo.items():
+            asset = None
+            asset_ref = listing.get("asset") or {}
+            if asset_ref.get("id") is not None:
+                asset = asset_map.get(str(asset_ref.get("id")))
+            listings.append(
+                {
+                    "listing_id": listing_id,
+                    "price": listing.get("price"),
+                    "fee": listing.get("fee"),
+                    "converted_price": listing.get("converted_price"),
+                    "converted_fee": listing.get("converted_fee"),
+                    "publisher_fee_app": listing.get("publisher_fee_app"),
+                    "publisher_fee_percent": listing.get("publisher_fee_percent"),
+                    "asset_id": asset_ref.get("id"),
+                    "currencyid": listing.get("currencyid"),
+                    "asset": asset,
+                    "raw": listing,
+                }
+            )
+        listings.sort(key=lambda item: (item.get("converted_price") or item.get("price") or 0, item.get("listing_id") or ""))
+        cheapest = listings[0] if listings else None
+        return {
+            "success": payload.get("success"),
+            "total_count": payload.get("total_count", len(listings)),
+            "start": payload.get("start", start),
+            "pagesize": payload.get("pagesize", len(listings)),
+            "hover_prefix": payload.get("hover_prefix", ""),
+            "hover_suffix": payload.get("hover_suffix", ""),
+            "listings": listings,
+            "assets": asset_map,
+            "cheapest_listing": cheapest,
+            "raw": payload,
+        }
+
     def get_item_listings_page_html(self, app_id, market_hash_name: str) -> str:
         return self.transport.request(
             "GET",

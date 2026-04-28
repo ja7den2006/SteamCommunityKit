@@ -20,6 +20,7 @@ DEFAULT_APP_ID = 570
 DEFAULT_GROUP_URL = "valve"
 DEFAULT_LARGE_GROUP_URL = "steamdb"
 DEFAULT_PUBLISHED_FILE_ID = "2682416130"
+DEFAULT_COLLECTION_FILE_ID = "3210489689"
 DEFAULT_GROUP_NAME_CHECK = "steamcommunitykit-smoke-check"
 DEFAULT_MARKET_ITEM = "AK-47 | Redline (Field-Tested)"
 DEFAULT_INVENTORY_APP_ID = 753
@@ -323,8 +324,16 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Collection Details",
         lambda: "collections={0}".format(
-            len(client.remote_storage.get_collection_details([args.published_file_id]).get("collectiondetails", []))
+            len(client.remote_storage.get_collection_details([args.collection_published_file_id]).get("collectiondetails", []))
         ),
+    )
+    run_check(
+        "Get Collection Detail",
+        lambda: _format_collection_detail(client.get_collection_detail(args.collection_published_file_id)),
+    )
+    run_check(
+        "Get Collection Child Details",
+        lambda: _format_collection_children(client.get_collection_child_details(args.collection_published_file_id)),
     )
     run_check(
         "Get Web API Server Info",
@@ -365,6 +374,15 @@ def run_public_suite(client: SteamClient, args) -> None:
                         client.resolve_steam_id(args.profile_identifier),
                         args.app_id,
                     ).keys()
+                )
+            ),
+        )
+        run_check(
+            "Get Player Achievements Summary",
+            lambda: _format_player_achievement_summary(
+                client.get_player_achievements_summary_for_user(
+                    args.profile_identifier,
+                    args.app_id,
                 )
             ),
         )
@@ -451,6 +469,16 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
             client.market.get_item_orders_summary(
                 app_id=args.market_app_id,
                 market_hash_name=args.market_hash_name,
+            )
+        ),
+    )
+    run_check(
+        "Market Listings Summary",
+        lambda: _format_market_listings_summary(
+            client.get_market_item_listings_summary(
+                args.market_app_id,
+                args.market_hash_name,
+                count=10,
             )
         ),
     )
@@ -702,6 +730,16 @@ def _format_market_orders_summary(payload: dict) -> str:
     )
 
 
+def _format_market_listings_summary(payload: dict) -> str:
+    cheapest = payload.get("cheapest_listing") or {}
+    cheapest_price = cheapest.get("converted_price") or cheapest.get("price")
+    return "listings={0} total={1} cheapest={2}".format(
+        len(payload.get("listings", [])),
+        payload.get("total_count"),
+        cheapest_price,
+    )
+
+
 def _format_market_search_summary(payload: dict) -> str:
     items = payload.get("items", [])
     first_hash_name = items[0]["hash_name"] if items else "<none>"
@@ -743,6 +781,33 @@ def _format_published_file_detail(payload: dict) -> str:
         payload.get("app_name") or payload.get("app_id"),
         payload.get("subscriptions"),
     )
+
+
+def _format_collection_detail(payload: dict) -> str:
+    return "collection={0} children={1}".format(
+        payload.get("published_file_id"),
+        payload.get("child_count"),
+    )
+
+
+def _format_collection_children(payload: dict) -> str:
+    children = payload.get("children", [])
+    first_title = children[0].get("title") if children else "<none>"
+    first_title = _safe_console_text(first_title)
+    return "children={0} first={1}".format(len(children), first_title)
+
+
+def _format_player_achievement_summary(payload: dict) -> str:
+    return "achieved={0}/{1} completion={2}".format(
+        payload.get("achieved_count"),
+        payload.get("achievement_count"),
+        payload.get("completion_percentage"),
+    )
+
+
+def _safe_console_text(value) -> str:
+    text = str(value)
+    return text.encode("cp1252", errors="replace").decode("cp1252")
 
 
 def _format_workshop_multi_page(payload: dict) -> str:
@@ -907,6 +972,11 @@ def parse_args() -> argparse.Namespace:
         "--published-file-id",
         default=DEFAULT_PUBLISHED_FILE_ID,
         help="Published file ID used for workshop/remote storage reads.",
+    )
+    parser.add_argument(
+        "--collection-published-file-id",
+        default=DEFAULT_COLLECTION_FILE_ID,
+        help="Workshop collection published file ID used for collection detail reads.",
     )
     parser.add_argument(
         "--group-name-check",

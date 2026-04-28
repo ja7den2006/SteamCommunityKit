@@ -208,6 +208,12 @@ class SteamClient:
     def get_published_file_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_published_file_detail(published_file_id)
 
+    def get_collection_detail(self, published_file_id) -> dict:
+        return self.remote_storage.get_collection_detail(published_file_id)
+
+    def get_collection_child_details(self, published_file_id) -> dict:
+        return self.remote_storage.get_collection_child_details(published_file_id)
+
     def query_published_files(self, **kwargs) -> dict:
         return self.published_files.query_files_summary(**kwargs)
 
@@ -328,6 +334,27 @@ class SteamClient:
             search_descriptions=search_descriptions,
             sort_column=sort_column,
             sort_dir=sort_dir,
+        )
+
+    def get_market_item_listings_summary(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        return self.market.get_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
         )
 
     def search_all_market_items(
