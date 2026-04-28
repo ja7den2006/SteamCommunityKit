@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
@@ -52,6 +52,10 @@ class PublishedFilesService:
         return_previews: Optional[bool] = None,
         return_children: Optional[bool] = None,
         return_short_description: Optional[bool] = None,
+        required_kv_tags: Optional[Sequence[Dict[str, str]]] = None,
+        return_for_sale_data: Optional[bool] = None,
+        return_metadata: Optional[bool] = None,
+        return_playtime_stats: Optional[int] = None,
     ) -> dict:
         params = {
             "query_type": int(query_type),
@@ -106,23 +110,33 @@ class PublishedFilesService:
             params["return_children"] = int(return_children)
         if return_short_description is not None:
             params["return_short_description"] = int(return_short_description)
+        if return_for_sale_data is not None:
+            params["return_for_sale_data"] = int(return_for_sale_data)
+        if return_metadata is not None:
+            params["return_metadata"] = int(return_metadata)
+        if return_playtime_stats is not None:
+            params["return_playtime_stats"] = int(return_playtime_stats)
+        service_payload = None
+        if required_kv_tags is not None:
+            service_payload = {"required_kv_tags": list(required_kv_tags)}
         return self.transport.request(
             "GET",
             f"{self.base_url}/QueryFiles/v1/",
             params=params,
             require_api_key=True,
+            service_payload=service_payload,
         )
 
     def set_developer_metadata(self, published_file_id, app_id, metadata: str) -> dict:
         return self.transport.request(
             "POST",
             f"{self.base_url}/SetDeveloperMetadata/v1/",
-            data={
+            require_api_key=True,
+            service_payload={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
                 "metadata": ensure_not_blank(metadata, "metadata"),
             },
-            require_api_key=True,
         )
 
     def update_app_ugc_ban(
@@ -142,8 +156,8 @@ class PublishedFilesService:
         return self.transport.request(
             "POST",
             f"{self.base_url}/UpdateAppUGCBan/v1/",
-            data=data,
             require_api_key=True,
+            service_payload=data,
         )
 
     def update_ban_status(
@@ -156,25 +170,25 @@ class PublishedFilesService:
         return self.transport.request(
             "POST",
             f"{self.base_url}/UpdateBanStatus/v1/",
-            data={
+            require_api_key=True,
+            service_payload={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
                 "banned": int(banned),
                 "reason": ensure_not_blank(reason, "reason"),
             },
-            require_api_key=True,
         )
 
     def update_incompatible_status(self, published_file_id, app_id, incompatible: bool) -> dict:
         return self.transport.request(
             "POST",
             f"{self.base_url}/UpdateIncompatibleStatus/v1/",
-            data={
+            require_api_key=True,
+            service_payload={
                 "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
                 "appid": validate_app_id(app_id),
                 "incompatible": int(incompatible),
             },
-            require_api_key=True,
         )
 
     def update_tags(
@@ -196,6 +210,6 @@ class PublishedFilesService:
         return self.transport.request(
             "POST",
             f"{self.base_url}/UpdateTags/v1/",
-            data=data,
             require_api_key=True,
+            service_payload=data,
         )

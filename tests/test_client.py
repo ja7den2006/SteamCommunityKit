@@ -96,6 +96,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.user_auth is not None
     assert client.webapi_util is not None
     assert client.workshop is not None
+    assert client.broadcast is not None
     assert client.community_api is not None
     assert client.cloud is not None
     assert client.econ is not None
@@ -223,12 +224,23 @@ def test_published_files_query_uses_public_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"total": 0}}))
     client = SteamClient(api_key="test", session=session)
 
-    client.published_files.query_files(query_type=0, cursor="*", app_id=570, total_only=True)
+    client.published_files.query_files(
+        query_type=0,
+        cursor="*",
+        app_id=570,
+        total_only=True,
+        required_kv_tags=[{"key": "mode", "value": "ranked"}],
+        return_metadata=True,
+        return_playtime_stats=7,
+    )
 
     call = session.calls[0]
     assert call["url"] == "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
     assert call["params"]["appid"] == 570
     assert call["params"]["totalonly"] == 1
+    assert call["params"]["return_metadata"] == 1
+    assert call["params"]["return_playtime_stats"] == 7
+    assert '"required_kv_tags":[{"key":"mode","value":"ranked"}]' in call["params"]["input_json"]
     assert call["params"]["key"] == "test"
     client.close()
 
@@ -241,9 +253,26 @@ def test_published_files_write_uses_api_base_url() -> None:
 
     call = session.calls[0]
     assert call["url"] == "https://api.steampowered.com/IPublishedFileService/SetDeveloperMetadata/v1/"
-    assert call["data"]["publishedfileid"] == "123456"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["metadata"] == "hello"
+    assert '"publishedfileid":"123456"' in call["params"]["input_json"]
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"metadata":"hello"' in call["params"]["input_json"]
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_broadcast_service_uses_input_json_on_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.broadcast.post_game_data_frame(570, "76561197960435530", "123456", "{\"score\":42}")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/IBroadcastService/PostGameDataFrame/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
+    assert '"broadcast_id":"123456"' in call["params"]["input_json"]
+    assert '"frame_data":"{\\"score\\":42}"' in call["params"]["input_json"]
     client.close()
 
 
