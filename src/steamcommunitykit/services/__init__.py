@@ -4,6 +4,7 @@ from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.econ import EconService
 from steamcommunitykit.services.groups import GroupsService
 from steamcommunitykit.services.inventory import InventoryService
+from steamcommunitykit.services.market import MarketService
 from steamcommunitykit.services.news import NewsService
 from steamcommunitykit.services.players import PlayersService
 from steamcommunitykit.services.published_files import PublishedFilesService
@@ -20,6 +21,7 @@ __all__ = [
     "EconService",
     "GroupsService",
     "InventoryService",
+    "MarketService",
     "NewsService",
     "PlayersService",
     "PublishedFilesService",

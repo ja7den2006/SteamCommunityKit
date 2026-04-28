@@ -138,6 +138,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.community is not None
     assert client.groups is not None
     assert client.inventory is not None
+    assert client.market is not None
     assert client.store is not None
     assert client.published_files is not None
     assert client.remote_storage is not None
@@ -756,6 +757,53 @@ def test_client_can_get_inventory_for_user_without_api_key_via_vanity_resolution
     assert result["total_inventory_count"] == 0
     assert session.calls[0]["url"] == "https://steamcommunity.com/id/gaben/"
     assert session.calls[1]["url"] == "https://steamcommunity.com/inventory/76561197968052866/730/2"
+    client.close()
+
+
+def test_market_price_overview_uses_community_market_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": True, "lowest_price": "$12.34"}))
+    client = SteamClient(session=session)
+
+    result = client.market.get_price_overview(730, "AK-47 | Redline (Field-Tested)", currency=1)
+
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/market/priceoverview/"
+    assert call["params"]["appid"] == 730
+    assert call["params"]["market_hash_name"] == "AK-47 | Redline (Field-Tested)"
+    assert call["params"]["currency"] == 1
+    assert result["lowest_price"] == "$12.34"
+    client.close()
+
+
+def test_market_search_uses_render_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": True, "total_count": 123}))
+    client = SteamClient(session=session)
+
+    result = client.market.search_items(query="AK-47", app_id=730, count=5)
+
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/market/search/render/"
+    assert call["params"]["query"] == "AK-47"
+    assert call["params"]["appid"] == 730
+    assert call["params"]["count"] == 5
+    assert call["params"]["norender"] == 1
+    assert result["total_count"] == 123
+    client.close()
+
+
+def test_market_item_listings_uses_listings_render_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": True, "listinginfo": {}}))
+    client = SteamClient(session=session)
+
+    result = client.market.get_item_listings(730, "AK-47 | Redline (Field-Tested)", count=10)
+
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20%28Field-Tested%29/render/"
+    assert call["params"]["count"] == 10
+    assert call["params"]["country"] == "US"
+    assert call["params"]["language"] == "english"
+    assert call["params"]["currency"] == 1
+    assert result["success"] is True
     client.close()
 
 

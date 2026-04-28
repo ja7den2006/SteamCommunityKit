@@ -15,6 +15,7 @@ from steamcommunitykit.services import (
     EconService,
     GroupsService,
     InventoryService,
+    MarketService,
     NewsService,
     PlayersService,
     PublishedFilesService,
@@ -56,6 +57,7 @@ class SteamClient:
         self.community = CommunityService(self._transport)
         self.groups = GroupsService(self._transport)
         self.inventory = InventoryService(self._transport)
+        self.market = MarketService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
         self.remote_storage = RemoteStorageService(self._transport)

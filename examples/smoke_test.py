@@ -20,6 +20,7 @@ DEFAULT_APP_ID = 570
 DEFAULT_GROUP_URL = "valve"
 DEFAULT_PUBLISHED_FILE_ID = "2682416130"
 DEFAULT_GROUP_NAME_CHECK = "steamcommunitykit-smoke-check"
+DEFAULT_MARKET_ITEM = "AK-47 | Redline (Field-Tested)"
 
 
 def print_header(title: str) -> None:
@@ -314,6 +315,19 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         "Resolve Community Profile XML",
         lambda: "persona={0}".format(client.users.resolve_community_profile_xml(args.profile_identifier).get("personaname", "")),
     )
+    run_check(
+        "Market Price Overview",
+        lambda: str(client.market.get_price_overview(args.market_app_id, args.market_hash_name)),
+    )
+    run_check(
+        "Market Search",
+        lambda: "results={0}".format(
+            client.market.search_items(query=args.market_query, app_id=args.market_app_id, count=5).get(
+                "total_count",
+                0,
+            )
+        ),
+    )
 
 
 def run_community_suite(client: SteamClient, args) -> None:
@@ -563,6 +577,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--vanity", default=DEFAULT_VANITY, help="Vanity name used in resolution tests.")
     parser.add_argument("--app-id", type=int, default=DEFAULT_APP_ID, help="App ID used in game-related tests.")
+    parser.add_argument("--market-app-id", type=int, default=730, help="App ID used in market tests.")
+    parser.add_argument(
+        "--market-hash-name",
+        default=DEFAULT_MARKET_ITEM,
+        help="Market hash name used for market price and listing tests.",
+    )
+    parser.add_argument(
+        "--market-query",
+        default="AK-47",
+        help="Query string used for market search tests.",
+    )
     parser.add_argument(
         "--group-url",
         default=DEFAULT_GROUP_URL,
