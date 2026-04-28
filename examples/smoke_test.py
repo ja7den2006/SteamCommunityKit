@@ -21,6 +21,8 @@ DEFAULT_GROUP_URL = "valve"
 DEFAULT_PUBLISHED_FILE_ID = "2682416130"
 DEFAULT_GROUP_NAME_CHECK = "steamcommunitykit-smoke-check"
 DEFAULT_MARKET_ITEM = "AK-47 | Redline (Field-Tested)"
+DEFAULT_INVENTORY_APP_ID = 753
+DEFAULT_INVENTORY_CONTEXT_ID = 6
 
 
 def print_header(title: str) -> None:
@@ -351,6 +353,15 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
             ).get("success")
         ),
     )
+    run_check(
+        "Market Orders Summary",
+        lambda: _format_market_orders_summary(
+            client.market.get_item_orders_summary(
+                app_id=args.market_app_id,
+                market_hash_name=args.market_hash_name,
+            )
+        ),
+    )
 
 
 def run_community_suite(client: SteamClient, args) -> None:
@@ -408,6 +419,18 @@ def run_community_suite(client: SteamClient, args) -> None:
     run_check(
         "Community Cookie Export/Import Roundtrip",
         lambda: _format_cookie_roundtrip(client, args),
+    )
+    run_check(
+        "Get Own Inventory Items",
+        lambda: _format_inventory_items(
+            client.get_full_inventory_items_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+                max_pages=2,
+            )
+        ),
     )
 
     if args.editable_group_url:
@@ -503,6 +526,22 @@ def _format_trade_history(payload: dict) -> str:
         total_trades if total_trades is not None else "unavailable",
         len(trades),
         more,
+    )
+
+
+def _format_market_orders_summary(payload: dict) -> str:
+    return "buy_rows={0} sell_rows={1} buy_summary={2}".format(
+        len(payload.get("buy_orders", [])),
+        len(payload.get("sell_orders", [])),
+        payload.get("buy_order_summary", ""),
+    )
+
+
+def _format_inventory_items(payload: dict) -> str:
+    return "items={0} total_inventory_count={1} pages={2}".format(
+        len(payload.get("items", [])),
+        payload.get("total_inventory_count"),
+        payload.get("pages_fetched", 0),
     )
 
 
@@ -610,6 +649,24 @@ def parse_args() -> argparse.Namespace:
         "--market-query",
         default="AK-47",
         help="Query string used for market search tests.",
+    )
+    parser.add_argument(
+        "--inventory-app-id",
+        type=int,
+        default=DEFAULT_INVENTORY_APP_ID,
+        help="App ID used for logged-in inventory tests.",
+    )
+    parser.add_argument(
+        "--inventory-context-id",
+        type=int,
+        default=DEFAULT_INVENTORY_CONTEXT_ID,
+        help="Context ID used for logged-in inventory tests.",
+    )
+    parser.add_argument(
+        "--inventory-count",
+        type=int,
+        default=2000,
+        help="Per-page inventory request count used for inventory tests.",
     )
     parser.add_argument(
         "--group-url",

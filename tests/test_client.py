@@ -789,6 +789,71 @@ def test_inventory_service_combines_assets_with_descriptions() -> None:
     client.close()
 
 
+def test_inventory_service_can_fetch_full_inventory_across_pages() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "One"}],
+                    "total_inventory_count": 2,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "2", "classid": "11", "instanceid": "0"}],
+                    "descriptions": [{"classid": "11", "instanceid": "0", "market_hash_name": "Two"}],
+                    "total_inventory_count": 2,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_full_inventory("76561197960435530", 730, 2, count=1)
+
+    assert result["pages_fetched"] == 2
+    assert len(result["assets"]) == 2
+    assert len(result["descriptions"]) == 2
+    assert session.calls[1]["params"]["start_assetid"] == "1"
+    client.close()
+
+
+def test_inventory_service_can_fetch_full_inventory_items_across_pages() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "One"}],
+                    "total_inventory_count": 2,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "2", "classid": "11", "instanceid": "0"}],
+                    "descriptions": [{"classid": "11", "instanceid": "0", "market_hash_name": "Two"}],
+                    "total_inventory_count": 2,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_full_inventory_items("76561197960435530", 730, 2, count=1)
+
+    assert result["pages_fetched"] == 2
+    assert result["items"][0]["description"]["market_hash_name"] == "One"
+    assert result["items"][1]["description"]["market_hash_name"] == "Two"
+    client.close()
+
+
 def test_client_can_get_inventory_for_user_without_api_key_via_vanity_resolution() -> None:
     xml = """
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -808,6 +873,34 @@ def test_client_can_get_inventory_for_user_without_api_key_via_vanity_resolution
     assert result["total_inventory_count"] == 0
     assert session.calls[0]["url"] == "https://steamcommunity.com/id/gaben/"
     assert session.calls[1]["url"] == "https://steamcommunity.com/inventory/76561197968052866/730/2"
+    client.close()
+
+
+def test_client_can_get_full_inventory_for_user_without_api_key_via_vanity_resolution() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile><steamID64>76561197968052866</steamID64></profile>
+    """
+    session = SequenceSession(
+        [
+            DummyResponse(text=xml),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0"}],
+                    "total_inventory_count": 1,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_full_inventory_for_user("gaben", 730, 2)
+
+    assert result["pages_fetched"] == 1
+    assert len(result["assets"]) == 1
+    assert session.calls[0]["url"] == "https://steamcommunity.com/id/gaben/"
     client.close()
 
 
@@ -884,6 +977,37 @@ def test_market_get_item_orders_histogram_uses_item_name_id_lookup() -> None:
     assert result["success"] == 1
     assert session.calls[1]["url"] == "https://steamcommunity.com/market/itemordershistogram"
     assert session.calls[1]["params"]["item_nameid"] == 7178002
+    client.close()
+
+
+def test_market_get_item_orders_summary_parses_tables() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": 1,
+                "buy_order_count": "123",
+                "buy_order_price": "$1.23",
+                "buy_order_summary": '<span class="market_commodity_orders_header_promote">123</span> buyers at <span class="market_commodity_orders_header_promote">$1.23</span> or lower',
+                "buy_order_table": "<table><tr><td>$1.23</td><td>2</td></tr><tr><td>$1.22</td><td>5</td></tr></table>",
+                "sell_order_count": "456",
+                "sell_order_price": "$1.25",
+                "sell_order_summary": '<span class="market_commodity_orders_header_promote">456</span> sellers at <span class="market_commodity_orders_header_promote">$1.25</span> or higher',
+                "sell_order_table": "<table><tr><td>$1.25</td><td>3</td></tr></table>",
+                "highest_buy_order": "123",
+                "lowest_sell_order": "125",
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.market.get_item_orders_summary(item_name_id=7178002)
+
+    assert result["item_name_id"] == 7178002
+    assert result["buy_order_summary"] == "123 buyers at $1.23 or lower"
+    assert result["sell_order_summary"] == "456 sellers at $1.25 or higher"
+    assert result["buy_orders"][0]["price_text"] == "$1.23"
+    assert result["buy_orders"][1]["quantity_text"] == "5"
+    assert result["sell_orders"][0]["price_text"] == "$1.25"
     client.close()
 
 

@@ -131,6 +131,69 @@ class MarketService:
             },
         )
 
+    @staticmethod
+    def _strip_html(value: str) -> str:
+        return re.sub(r"\s+", " ", re.sub(r"<.*?>", "", value or "")).strip()
+
+    def _parse_order_rows(self, table_html: str) -> list:
+        rows = []
+        for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", table_html or "", re.I | re.S):
+            cells = re.findall(r"<td[^>]*>(.*?)</td>", row_html, re.I | re.S)
+            if len(cells) < 2:
+                continue
+            price_text = self._strip_html(cells[0])
+            quantity_text = self._strip_html(cells[1])
+            rows.append(
+                {
+                    "price_text": price_text,
+                    "quantity_text": quantity_text,
+                }
+            )
+        return rows
+
+    def get_item_orders_summary(
+        self,
+        *,
+        item_name_id=None,
+        app_id=None,
+        market_hash_name: str = None,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        if item_name_id is None:
+            if app_id is None or market_hash_name is None:
+                raise SteamResponseError(
+                    "get_item_orders_summary requires item_name_id or both app_id and market_hash_name."
+                )
+            item_name_id = self.get_item_name_id(app_id, market_hash_name)
+        histogram = self.get_item_orders_histogram(
+            item_name_id=item_name_id,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        return {
+            "success": histogram.get("success"),
+            "item_name_id": validate_uint32(item_name_id, "item_name_id"),
+            "buy_order_count": histogram.get("buy_order_count"),
+            "buy_order_price": histogram.get("buy_order_price"),
+            "buy_order_summary": self._strip_html(histogram.get("buy_order_summary", "")),
+            "buy_orders": self._parse_order_rows(histogram.get("buy_order_table", "")),
+            "sell_order_count": histogram.get("sell_order_count"),
+            "sell_order_price": histogram.get("sell_order_price"),
+            "sell_order_summary": self._strip_html(histogram.get("sell_order_summary", "")),
+            "sell_orders": self._parse_order_rows(histogram.get("sell_order_table", "")),
+            "highest_buy_order": histogram.get("highest_buy_order"),
+            "lowest_sell_order": histogram.get("lowest_sell_order"),
+            "graph_max_y": histogram.get("graph_max_y"),
+            "graph_min_x": histogram.get("graph_min_x"),
+            "graph_max_x": histogram.get("graph_max_x"),
+            "price_prefix": histogram.get("price_prefix", ""),
+            "price_suffix": histogram.get("price_suffix", ""),
+            "raw": histogram,
+        }
+
     def get_price_history(self, app_id, market_hash_name: str) -> dict:
         html_text = self.get_item_listings_page_html(app_id, market_hash_name)
         line_match = re.search(r"var\s+line1=(\[.*?\]);", html_text, re.S)
