@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Union
+from urllib.parse import urlparse
 
 from steamcommunitykit.exceptions import SteamValidationError
 
@@ -132,6 +133,48 @@ def parse_cookie_string(cookie_string: str) -> Dict[str, str]:
     if not cookies:
         raise SteamValidationError("cookie_string did not contain any valid cookies.")
     return cookies
+
+
+def parse_steam_profile_identifier(
+    identifier: Union[str, int],
+) -> Dict[str, str]:
+    if isinstance(identifier, int):
+        return {
+            "type": "steam_id",
+            "value": validate_steam_id(identifier, "identifier"),
+        }
+
+    normalized = ensure_not_blank(str(identifier), "identifier")
+    if normalized.isdigit():
+        return {
+            "type": "steam_id",
+            "value": validate_steam_id(normalized, "identifier"),
+        }
+
+    parsed = urlparse(normalized)
+    if parsed.scheme or parsed.netloc:
+        host = parsed.netloc.lower()
+        if host not in {"steamcommunity.com", "www.steamcommunity.com"}:
+            raise SteamValidationError("identifier must point to steamcommunity.com.")
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2 and parts[0].lower() == "profiles":
+            return {
+                "type": "steam_id",
+                "value": validate_steam_id(parts[1], "identifier"),
+            }
+        if len(parts) >= 2 and parts[0].lower() == "id":
+            return {
+                "type": "vanity",
+                "value": ensure_not_blank(parts[1], "identifier"),
+            }
+        raise SteamValidationError(
+            "steamcommunity.com URLs must use /profiles/<steamid> or /id/<vanity>."
+        )
+
+    return {
+        "type": "vanity",
+        "value": normalized.strip("/"),
+    }
 
 
 def load_api_key_from_json(path: Union[str, Path]) -> str:

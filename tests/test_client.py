@@ -5,6 +5,7 @@ from steamcommunitykit import (
     CredentialLoginResult,
     SteamAuthenticationError,
     SteamClient,
+    SteamNotFoundError,
     SteamRateLimitError,
     SteamValidationError,
 )
@@ -173,6 +174,67 @@ def test_users_service_uses_public_player_summaries_endpoint() -> None:
     assert call["url"] == "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
     assert call["params"]["steamids"] == "76561197960435530"
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_users_resolve_steam_id_accepts_profile_url() -> None:
+    client = SteamClient(api_key="test")
+
+    resolved = client.users.resolve_steam_id("https://steamcommunity.com/profiles/76561197960435530/")
+
+    assert resolved == "76561197960435530"
+    client.close()
+
+
+def test_users_resolve_steam_id_accepts_vanity_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"steamid": "76561197968052866", "success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    resolved = client.users.resolve_steam_id("https://steamcommunity.com/id/gaben/")
+
+    assert resolved == "76561197968052866"
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/"
+    assert call["params"]["vanityurl"] == "gaben"
+    client.close()
+
+
+def test_users_resolve_steam_id_accepts_plain_vanity_name() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"steamid": "76561197968052866", "success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    resolved = client.users.resolve_steam_id("gaben")
+
+    assert resolved == "76561197968052866"
+    client.close()
+
+
+def test_users_resolve_steam_id_raises_not_found_for_missing_vanity() -> None:
+    session = RecordingSession(
+        DummyResponse(json_data={"response": {"success": 42, "message": "No match"}})
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    with pytest.raises(SteamNotFoundError):
+        client.users.resolve_steam_id("definitely-not-a-real-vanity-name")
+
+    client.close()
+
+
+def test_users_get_player_summary_resolves_identifier_before_fetch() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={"response": {"steamid": "76561197968052866", "success": 1}}),
+            DummyResponse(json_data={"response": {"players": [{"steamid": "76561197968052866", "personaname": "gaben"}]}}),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    summary = client.users.get_player_summary("https://steamcommunity.com/id/gaben/")
+
+    assert summary["steamid"] == "76561197968052866"
+    assert summary["personaname"] == "gaben"
+    assert len(session.calls) == 2
     client.close()
 
 
