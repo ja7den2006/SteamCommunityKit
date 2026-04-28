@@ -234,6 +234,20 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Query Published Files Multi-Page",
+        lambda: _format_workshop_multi_page(
+            client.query_all_published_files(
+                query_type=0,
+                app_id=args.app_id,
+                cursor="*",
+                num_per_page=2,
+                return_short_description=True,
+                max_pages=2,
+                max_items=3,
+            )
+        ),
+    )
+    run_check(
         "Get Published File Details",
         lambda: _format_published_file_detail(
             client.get_published_file_detail(
@@ -600,6 +614,14 @@ def _format_published_file_detail(payload: dict) -> str:
         payload.get("title", ""),
         payload.get("app_name") or payload.get("app_id"),
         payload.get("subscriptions"),
+    )
+
+
+def _format_workshop_multi_page(payload: dict) -> str:
+    return "items={0} pages={1} total={2}".format(
+        len(payload.get("items", [])),
+        payload.get("pages_fetched", 0),
+        payload.get("total"),
     )
 
 

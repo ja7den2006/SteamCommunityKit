@@ -142,6 +142,13 @@ class SteamClient:
     def query_published_files(self, **kwargs) -> dict:
         return self.published_files.query_files_summary(**kwargs)
 
+    def query_all_published_files(self, *, max_pages: Optional[int] = None, max_items: Optional[int] = None, **kwargs) -> dict:
+        return self.published_files.query_all_files_summary(
+            max_pages=max_pages,
+            max_items=max_items,
+            **kwargs,
+        )
+
     def get_inventory_for_user(
         self,
         identifier,

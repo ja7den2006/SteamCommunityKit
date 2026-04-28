@@ -527,6 +527,95 @@ def test_published_files_query_summary_normalizes_valid_items_only() -> None:
     client.close()
 
 
+def test_published_files_query_all_files_summary_paginates_with_cursor() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "total": 3,
+                        "next_cursor": "cursor123",
+                        "publishedfiledetails": [
+                            {
+                                "publishedfileid": "123",
+                                "result": 1,
+                                "title": "One",
+                                "consumer_appid": 570,
+                            },
+                            {
+                                "publishedfileid": "456",
+                                "result": 1,
+                                "title": "Two",
+                                "consumer_appid": 570,
+                            },
+                        ],
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "total": 3,
+                        "next_cursor": "cursor456",
+                        "publishedfiledetails": [
+                            {
+                                "publishedfileid": "456",
+                                "result": 1,
+                                "title": "Two",
+                                "consumer_appid": 570,
+                            },
+                            {
+                                "publishedfileid": "789",
+                                "result": 1,
+                                "title": "Three",
+                                "consumer_appid": 570,
+                            },
+                        ],
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.published_files.query_all_files_summary(query_type=0, app_id=570, cursor="*", max_pages=2)
+
+    assert result["total"] == 3
+    assert result["pages_fetched"] == 2
+    assert result["item_ids"] == ["123", "456", "789"]
+    assert result["items"][2]["title"] == "Three"
+    assert session.calls[1]["params"]["cursor"] == "cursor123"
+    client.close()
+
+
+def test_client_query_all_published_files_uses_summary_helper() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "total": 1,
+                    "next_cursor": "",
+                    "publishedfiledetails": [
+                        {
+                            "publishedfileid": "123",
+                            "result": 1,
+                            "title": "One",
+                            "consumer_appid": 570,
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.query_all_published_files(query_type=0, app_id=570, cursor="*", max_pages=1)
+
+    assert result["item_ids"] == ["123"]
+    assert result["pages_fetched"] == 1
+    client.close()
+
+
 def test_remote_storage_public_details_use_public_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"publishedfiledetails": []}}))
     client = SteamClient(api_key="test", session=session)

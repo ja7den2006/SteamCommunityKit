@@ -5,7 +5,7 @@ from typing import Dict, Optional, Sequence
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.services.remote_storage import RemoteStorageService
-from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint64
+from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint32, validate_uint64
 
 
 class PublishedFilesService:
@@ -128,4 +128,60 @@ class PublishedFilesService:
             "items": [self._detail_normalizer(detail) for detail in valid_details],
             "item_ids": [detail.get("publishedfileid") for detail in valid_details if detail.get("publishedfileid")],
             "raw": payload,
+        }
+
+    def query_all_files_summary(self, *, max_pages=None, max_items=None, **kwargs) -> dict:
+        cursor = kwargs.pop("cursor", "*")
+        page = kwargs.pop("page", 1)
+        page_limit = None if max_pages is None else validate_uint32(max_pages, "max_pages")
+        item_limit = None if max_items is None else validate_uint32(max_items, "max_items")
+
+        pages = []
+        items = []
+        item_ids = []
+        seen_ids = set()
+        page_count = 0
+        total = None
+        next_cursor = None
+
+        while True:
+            summary = self.query_files_summary(cursor=cursor, page=page, **kwargs)
+            pages.append(summary)
+            page_count += 1
+            total = summary.get("total", total)
+            next_cursor = summary.get("next_cursor")
+
+            for item in summary.get("items", []):
+                published_file_id = item.get("published_file_id")
+                if published_file_id and published_file_id in seen_ids:
+                    continue
+                if published_file_id:
+                    seen_ids.add(published_file_id)
+                    item_ids.append(published_file_id)
+                items.append(item)
+                if item_limit is not None and len(items) >= item_limit:
+                    items = items[:item_limit]
+                    item_ids = item_ids[:item_limit]
+                    break
+
+            if item_limit is not None and len(items) >= item_limit:
+                break
+            if page_limit is not None and page_count >= page_limit:
+                break
+            if not next_cursor or next_cursor == cursor:
+                break
+            if total is not None and len(items) >= int(total):
+                break
+
+            cursor = next_cursor
+            page += 1
+
+        return {
+            "total": total,
+            "pages_fetched": page_count,
+            "next_cursor": next_cursor,
+            "items": items,
+            "item_ids": item_ids,
+            "pages": pages,
+            "raw": pages[-1]["raw"] if pages else {},
         }
