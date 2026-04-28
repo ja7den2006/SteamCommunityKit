@@ -103,6 +103,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.econ is not None
     assert client.game_notifications is not None
     assert client.leaderboards is not None
+    assert client.microtxn is not None
     client.close()
 
 
@@ -355,6 +356,56 @@ def test_cheat_reporting_request_vac_status_uses_service_payload() -> None:
     assert '"steamid":"76561197972495328"' in call["params"]["input_json"]
     assert '"appid":570' in call["params"]["input_json"]
     assert '"session_id":"123456"' in call["params"]["input_json"]
+    client.close()
+
+
+def test_microtxn_get_user_info_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"params": {"country": "US"}}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.microtxn.get_user_info(570, steam_id="76561197960435530")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/GetUserInfo/v2/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["steamid"] == "76561197960435530"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_microtxn_query_txn_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"result": "OK"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.microtxn.query_txn(570, order_id="0", trans_id="123456")
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/QueryTxn/v3/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["orderid"] == "0"
+    assert call["params"]["transid"] == "123456"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_microtxn_get_report_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"result": "OK"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.microtxn.get_report(
+        570,
+        "2026-01-01T00:00:00Z",
+        report_type="GAMESALES",
+        max_results=1000,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/GetReport/v5/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["time"] == "2026-01-01T00:00:00Z"
+    assert call["params"]["type"] == "GAMESALES"
+    assert call["params"]["maxresults"] == 1000
+    assert call["params"]["key"] == "test"
     client.close()
 
 

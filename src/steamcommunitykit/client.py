@@ -20,6 +20,7 @@ from steamcommunitykit.services import (
     GameNotificationsService,
     GroupsService,
     LeaderboardsService,
+    MicroTxnService,
     NewsService,
     PlayersService,
     PublishedFilesService,
@@ -70,6 +71,7 @@ class SteamClient:
         self.game_notifications = GameNotificationsService(self._transport)
         self.groups = GroupsService(self._transport)
         self.leaderboards = LeaderboardsService(self._transport)
+        self.microtxn = MicroTxnService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
         self.published_item_search = PublishedItemSearchService(self._transport)

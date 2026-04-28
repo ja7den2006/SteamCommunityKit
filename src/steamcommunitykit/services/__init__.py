@@ -9,6 +9,7 @@ from steamcommunitykit.services.community import CommunityService
 from steamcommunitykit.services.game_notifications import GameNotificationsService
 from steamcommunitykit.services.groups import GroupsService
 from steamcommunitykit.services.leaderboards import LeaderboardsService
+from steamcommunitykit.services.microtxn import MicroTxnService
 from steamcommunitykit.services.news import NewsService
 from steamcommunitykit.services.players import PlayersService
 from steamcommunitykit.services.published_files import PublishedFilesService
@@ -34,6 +35,7 @@ __all__ = [
     "GameNotificationsService",
     "GroupsService",
     "LeaderboardsService",
+    "MicroTxnService",
     "NewsService",
     "PlayersService",
     "PublishedFilesService",
