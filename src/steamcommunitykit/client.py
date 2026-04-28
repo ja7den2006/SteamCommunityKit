@@ -124,6 +124,18 @@ class SteamClient:
             badge_id,
         )
 
+    def get_group_id64(self, group_url: str) -> str:
+        return self.groups.fetch_group_id64(group_url)
+
+    def get_group_details(self, group_url: str, page: int = 1) -> dict:
+        return self.groups.get_group_details(group_url, page=page)
+
+    def get_group_members(self, group_url: str, page: int = 1) -> dict:
+        return self.groups.get_group_members(group_url, page=page)
+
+    def get_all_group_members(self, group_url: str, *, start_page: int = 1, max_pages: Optional[int] = None) -> dict:
+        return self.groups.get_all_group_members(group_url, start_page=start_page, max_pages=max_pages)
+
     def get_inventory_for_user(
         self,
         identifier,

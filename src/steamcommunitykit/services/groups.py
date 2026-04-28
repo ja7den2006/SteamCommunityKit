@@ -4,7 +4,7 @@ import html
 import re
 import time
 import xml.etree.ElementTree as ET
-from typing import Dict
+from typing import Dict, Optional
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
 from steamcommunitykit.exceptions import (
@@ -24,6 +24,15 @@ class GroupsService:
 
     def _community_cookies(self) -> Dict[str, str]:
         credentials = self.transport.require_community_credentials()
+        return {
+            "steamLoginSecure": credentials.steam_login_secure_value,
+            "sessionid": credentials.session_id,
+        }
+
+    def _optional_community_cookies(self) -> Optional[Dict[str, str]]:
+        credentials = self.transport.community_credentials
+        if credentials is None:
+            return None
         return {
             "steamLoginSecure": credentials.steam_login_secure_value,
             "sessionid": credentials.session_id,
@@ -100,7 +109,7 @@ class GroupsService:
             "GET",
             f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
             params={"xml": "1"},
-            cookies=self._community_cookies(),
+            cookies=self._optional_community_cookies(),
             expected="text",
         )
         root = self._parse_xml(
@@ -178,6 +187,53 @@ class GroupsService:
             "total_pages": int(root.findtext("totalPages") or 0),
             "member_count": int(root.findtext("memberCount") or 0),
             "members": [member.text for member in member_nodes if member.text],
+        }
+
+    def get_all_group_members(self, group_url: str, *, start_page: int = 1, max_pages: Optional[int] = None) -> dict:
+        current_page = int(start_page)
+        if current_page <= 0:
+            raise SteamValidationError("start_page must be greater than zero.")
+        if max_pages is not None and int(max_pages) <= 0:
+            raise SteamValidationError("max_pages must be greater than zero.")
+
+        pages = []
+        members = []
+        seen_members = set()
+        page_count = 0
+        total_pages = None
+        group_id64 = None
+        member_count = None
+
+        while True:
+            page = self.get_group_members(group_url, page=current_page)
+            pages.append(page)
+            page_count += 1
+            total_pages = page.get("total_pages", total_pages)
+            group_id64 = page.get("group_id64", group_id64)
+            member_count = page.get("member_count", member_count)
+
+            for member in page.get("members", []):
+                if member in seen_members:
+                    continue
+                seen_members.add(member)
+                members.append(member)
+
+            if max_pages is not None and page_count >= int(max_pages):
+                break
+            if total_pages is None or current_page >= int(total_pages):
+                break
+            current_page += 1
+
+        return {
+            "group_id64": group_id64,
+            "group_url": group_url,
+            "member_count": member_count,
+            "pages_fetched": page_count,
+            "start_page": start_page,
+            "total_pages": total_pages or 0,
+            "members": members,
+            "pages": pages,
+            "raw": pages[-1] if pages else {},
         }
 
     def create_group(

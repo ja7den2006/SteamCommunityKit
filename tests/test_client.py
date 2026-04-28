@@ -1651,6 +1651,95 @@ def test_groups_get_group_members_parses_member_ids() -> None:
     client.close()
 
 
+def test_groups_fetch_group_id64_does_not_require_login() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <memberList><groupID64>103582791429521412</groupID64></memberList>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(session=session)
+
+    group_id64 = client.groups.fetch_group_id64("Valve")
+
+    assert group_id64 == "103582791429521412"
+    assert session.calls[0]["cookies"] is None
+    client.close()
+
+
+def test_groups_get_all_group_members_paginates_and_deduplicates() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>4</memberCount>
+                  <totalPages>2</totalPages>
+                  <currentPage>1</currentPage>
+                  <members>
+                    <steamID64>1</steamID64>
+                    <steamID64>2</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>4</memberCount>
+                  <totalPages>2</totalPages>
+                  <currentPage>2</currentPage>
+                  <members>
+                    <steamID64>2</steamID64>
+                    <steamID64>3</steamID64>
+                    <steamID64>4</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.groups.get_all_group_members("Valve")
+
+    assert result["pages_fetched"] == 2
+    assert result["member_count"] == 4
+    assert result["members"] == ["1", "2", "3", "4"]
+    assert session.calls[1]["params"]["p"] == 2
+    client.close()
+
+
+def test_client_can_get_all_group_members_without_login() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            text="""
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <memberList>
+              <groupID64>103582791429521412</groupID64>
+              <memberCount>2</memberCount>
+              <totalPages>1</totalPages>
+              <currentPage>1</currentPage>
+              <members>
+                <steamID64>1</steamID64>
+                <steamID64>2</steamID64>
+              </members>
+            </memberList>
+            """
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_all_group_members("Valve")
+
+    assert result["pages_fetched"] == 1
+    assert result["members"] == ["1", "2"]
+    client.close()
+
+
 def test_group_availability_uses_form_data_and_browser_headers() -> None:
     xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

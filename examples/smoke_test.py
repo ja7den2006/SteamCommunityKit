@@ -18,6 +18,7 @@ DEFAULT_STEAM_ID = "76561197960435530"
 DEFAULT_VANITY = "gaben"
 DEFAULT_APP_ID = 570
 DEFAULT_GROUP_URL = "valve"
+DEFAULT_LARGE_GROUP_URL = "steamdb"
 DEFAULT_PUBLISHED_FILE_ID = "2682416130"
 DEFAULT_GROUP_NAME_CHECK = "steamcommunitykit-smoke-check"
 DEFAULT_MARKET_ITEM = "AK-47 | Redline (Field-Tested)"
@@ -368,6 +369,16 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
             )
         ),
     )
+    run_check(
+        "Fetch Group ID64 (Public)",
+        lambda: client.get_group_id64(args.group_url),
+    )
+    run_check(
+        "Get Large Group Members (Public)",
+        lambda: _format_group_members_aggregate(
+            client.get_all_group_members(args.large_group_url, max_pages=2)
+        ),
+    )
 
 
 def run_community_suite(client: SteamClient, args) -> None:
@@ -561,6 +572,14 @@ def _format_inventory_items(payload: dict) -> str:
     )
 
 
+def _format_group_members_aggregate(payload: dict) -> str:
+    return "members={0} pages={1}/{2}".format(
+        len(payload.get("members", [])),
+        payload.get("pages_fetched", 0),
+        payload.get("total_pages", 0),
+    )
+
+
 def _format_cookie_roundtrip(client: SteamClient, args) -> str:
     cookie_string = client.export_community_cookie_string()
     roundtrip_client = build_client(args)
@@ -688,6 +707,11 @@ def parse_args() -> argparse.Namespace:
         "--group-url",
         default=DEFAULT_GROUP_URL,
         help="Public group URL slug used for group read tests.",
+    )
+    parser.add_argument(
+        "--large-group-url",
+        default=DEFAULT_LARGE_GROUP_URL,
+        help="Larger public group URL slug used for multi-page group member tests.",
     )
     parser.add_argument(
         "--editable-group-url",
