@@ -4,7 +4,7 @@ from typing import Optional
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_steam_id, validate_uint32, validate_uint64
+from steamcommunitykit.utils import ensure_not_blank, validate_uint32, validate_uint64
 
 
 class EconService:
@@ -95,33 +95,5 @@ class EconService:
             "GET",
             f"{self.base_url}/GetTradeOffersSummary/v1/",
             params=params,
-            require_api_key=True,
-        )
-
-    def flush_inventory_cache(self, steam_id, app_id, context_id) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/FlushInventoryCache/v1/",
-            data={
-                "steamid": validate_steam_id(steam_id),
-                "appid": validate_app_id(app_id),
-                "contextid": validate_uint64(context_id, "context_id"),
-            },
-            require_api_key=True,
-        )
-
-    def flush_asset_appearance_cache(self, app_id) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/FlushAssetAppearanceCache/v1/",
-            data={"appid": validate_app_id(app_id)},
-            require_api_key=True,
-        )
-
-    def flush_context_cache(self, app_id) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/FlushContextCache/v1/",
-            data={"appid": validate_app_id(app_id)},
             require_api_key=True,
         )

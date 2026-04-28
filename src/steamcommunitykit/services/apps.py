@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, validate_app_id
+from steamcommunitykit.utils import validate_app_id
 
 
 class AppsService:
@@ -30,23 +28,4 @@ class AppsService:
             "GET",
             f"{self.base_url}/UpToDateCheck/v1/",
             params={"appid": validate_app_id(app_id), "version": int(version)},
-        )
-
-    def get_server_list(self, filter_query: str, limit: Optional[int] = None) -> dict:
-        params = {"filter": ensure_not_blank(filter_query, "filter_query")}
-        if limit is not None:
-            params["limit"] = int(limit)
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/GetServerList/v1/",
-            params=params,
-            require_api_key=True,
-        )
-
-    def get_players_banned(self, app_id) -> dict:
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/GetPlayersBanned/v1/",
-            params={"appid": validate_app_id(app_id)},
-            require_api_key=True,
         )

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
 
@@ -68,18 +69,64 @@ class CommunityService:
         return response
 
     def update_persona_name(self, steam_id, persona_name: str) -> dict:
+        return self.edit_profile(
+            steam_id,
+            persona_name=persona_name,
+        )
+
+    def edit_profile(
+        self,
+        steam_id,
+        *,
+        persona_name: Optional[str] = None,
+        real_name: Optional[str] = None,
+        summary: Optional[str] = None,
+        custom_url: Optional[str] = None,
+        country: Optional[str] = None,
+        state: Optional[str] = None,
+        city: Optional[Union[int, str]] = None,
+        hide_profile_awards: bool = False,
+    ) -> dict:
         credentials = self.transport.require_community_credentials()
+        normalized_steam_id = validate_steam_id(steam_id)
+        data = {
+            "sessionID": credentials.session_id,
+            "type": "profileSave",
+            "hide_profile_awards": int(hide_profile_awards),
+            "json": 1,
+        }
+        if persona_name is not None:
+            data["personaName"] = ensure_not_blank(persona_name, "persona_name")
+        if real_name is not None:
+            data["real_name"] = real_name
+        if summary is not None:
+            data["summary"] = summary
+        if custom_url is not None:
+            data["customURL"] = custom_url
+        if country is not None:
+            data["country"] = country
+        if state is not None:
+            data["state"] = state
+        if city is not None:
+            data["city"] = str(city)
+
+        editable_fields = {
+            "personaName",
+            "real_name",
+            "summary",
+            "customURL",
+            "country",
+            "state",
+            "city",
+        }
+        if not any(field in data for field in editable_fields):
+            raise SteamValidationError("edit_profile requires at least one editable field.")
+
         return self.transport.request(
             "POST",
-            f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/",
-            data={
-                "sessionID": credentials.session_id,
-                "type": "profileSave",
-                "personaName": ensure_not_blank(persona_name, "persona_name"),
-                "hide_profile_awards": 0,
-                "json": 1,
-            },
-            headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/"),
+            f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/",
+            data=data,
+            headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/"),
             cookies=self._community_cookies(),
         )
 

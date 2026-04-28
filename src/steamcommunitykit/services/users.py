@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
-from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import (
     ensure_not_blank,
-    normalize_app_ids,
     normalize_steam_ids,
-    validate_app_id,
     validate_steam_id,
 )
 
@@ -67,38 +64,5 @@ class UsersService:
             "GET",
             f"{self.base_url}/GetUserGroupList/v1/",
             params={"steamid": validate_steam_id(steam_id)},
-            require_api_key=True,
-        )
-
-    def check_app_ownership(self, steam_id, app_id) -> dict:
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/CheckAppOwnership/v4/",
-            params={
-                "steamid": validate_steam_id(steam_id),
-                "appid": validate_app_id(app_id),
-            },
-            require_api_key=True,
-        )
-
-    def get_app_price_info(self, steam_id, app_ids) -> dict:
-        normalized_ids = [str(app_id) for app_id in normalize_app_ids(app_ids)]
-        if len(normalized_ids) > 100:
-            raise SteamValidationError("app_ids cannot contain more than 100 app ids.")
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/GetAppPriceInfo/v1/",
-            params={
-                "steamid": validate_steam_id(steam_id),
-                "appids": ",".join(normalized_ids),
-            },
-            require_api_key=True,
-        )
-
-    def get_deleted_steam_ids(self, rowversion) -> dict:
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/GetDeletedSteamIDs/v1/",
-            params={"rowversion": int(rowversion)},
             require_api_key=True,
         )

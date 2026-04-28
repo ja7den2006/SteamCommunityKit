@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import normalize_uint64_ids, validate_app_id, validate_steam_id, validate_uint64
@@ -45,56 +43,5 @@ class RemoteStorageService:
             "GET",
             f"{self.base_url}/GetUGCFileDetails/v1/",
             params=params,
-            require_api_key=True,
-        )
-
-    def enumerate_user_subscribed_files(self, steam_id, app_id, list_type: Optional[int] = None) -> dict:
-        data = {
-            "steamid": validate_steam_id(steam_id),
-            "appid": validate_app_id(app_id),
-        }
-        if list_type is not None:
-            data["listtype"] = int(list_type)
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/EnumerateUserSubscribedFiles/v1/",
-            data=data,
-            require_api_key=True,
-        )
-
-    def subscribe_published_file(self, steam_id, app_id, published_file_id) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/SubscribePublishedFile/v1/",
-            data={
-                "steamid": validate_steam_id(steam_id),
-                "appid": validate_app_id(app_id),
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-            },
-            require_api_key=True,
-        )
-
-    def unsubscribe_published_file(self, steam_id, app_id, published_file_id) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/UnsubscribePublishedFile/v1/",
-            data={
-                "steamid": validate_steam_id(steam_id),
-                "appid": validate_app_id(app_id),
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-            },
-            require_api_key=True,
-        )
-
-    def set_ugc_used_by_gc(self, steam_id, ugc_id, app_id, used: bool) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/SetUGCUsedByGC/v1/",
-            data={
-                "steamid": validate_steam_id(steam_id),
-                "ugcid": validate_uint64(ugc_id, "ugc_id"),
-                "appid": validate_app_id(app_id),
-                "used": int(used),
-            },
             require_api_key=True,
         )

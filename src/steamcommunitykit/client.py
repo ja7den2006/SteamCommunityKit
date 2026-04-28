@@ -12,14 +12,11 @@ from steamcommunitykit.services import (
     AppsService,
     AuthenticationService,
     CommunityService,
-    CommunityAPIService,
     EconService,
     GroupsService,
     NewsService,
     PlayersService,
     PublishedFilesService,
-    PublishedItemSearchService,
-    PublishedItemVotingService,
     RemoteStorageService,
     StoreService,
     UserStatsService,
@@ -55,13 +52,10 @@ class SteamClient:
         self.user_stats = UserStatsService(self._transport)
         self.auth = AuthenticationService(self._transport)
         self.econ = EconService(self._transport)
-        self.community_api = CommunityAPIService(self._transport)
         self.community = CommunityService(self._transport)
         self.groups = GroupsService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
-        self.published_item_search = PublishedItemSearchService(self._transport)
-        self.published_item_voting = PublishedItemVotingService(self._transport)
         self.remote_storage = RemoteStorageService(self._transport)
         self.webapi_util = WebAPIUtilService(self._transport)
 

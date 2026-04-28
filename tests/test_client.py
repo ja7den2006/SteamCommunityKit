@@ -18,6 +18,7 @@ class DummyResponse:
         self.text = text
         self.headers = headers or {}
         self.content = text.encode("utf-8") if text else b"{}"
+        self.cookies = {}
 
     def json(self):
         if self._json_data is None:
@@ -120,15 +121,15 @@ def test_client_exposes_expected_services() -> None:
     assert client.user_stats is not None
     assert client.auth is not None
     assert client.econ is not None
-    assert client.community_api is not None
     assert client.community is not None
     assert client.groups is not None
     assert client.store is not None
     assert client.published_files is not None
-    assert client.published_item_search is not None
-    assert client.published_item_voting is not None
     assert client.remote_storage is not None
     assert client.webapi_util is not None
+    assert not hasattr(client, "community_api")
+    assert not hasattr(client, "published_item_search")
+    assert not hasattr(client, "published_item_voting")
     assert not hasattr(client, "broadcast")
     assert not hasattr(client, "cheat_reporting")
     assert not hasattr(client, "cloud")
@@ -150,45 +151,33 @@ def test_community_credentials_build_cookie_from_access_token() -> None:
     assert credentials.steam_login_secure_value == "76561197960435530%7C%7Ctoken123"
 
 
-def test_users_service_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"ownsapp": True}))
+def test_users_service_uses_public_player_summaries_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"players": []}}))
     client = SteamClient(api_key="test", session=session)
 
-    client.users.check_app_ownership("76561197960435530", 440)
+    client.users.get_player_summaries("76561197960435530")
 
     call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamUser/CheckAppOwnership/v4/"
-    assert call["params"]["steamid"] == "76561197960435530"
-    assert call["params"]["appid"] == 440
+    assert call["url"] == "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+    assert call["params"]["steamids"] == "76561197960435530"
     assert call["params"]["key"] == "test"
     client.close()
 
 
-def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
-    session = RecordingSession(DummyResponse(json_data={"price_info": {}}))
-    client = SteamClient(api_key="test", session=session)
-
-    with pytest.raises(SteamValidationError):
-        client.users.get_app_price_info("76561197960435530", list(range(1, 102)))
-
-    client.close()
-
-
-def test_apps_service_uses_server_list_endpoint() -> None:
+def test_apps_service_uses_public_servers_at_address_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"servers": []}}))
     client = SteamClient(api_key="test", session=session)
 
-    client.apps.get_server_list("\\appid\\570", limit=5)
+    client.apps.get_servers_at_address("208.64.200.0")
 
     call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetServerList/v1/"
-    assert call["params"]["filter"] == "\\appid\\570"
-    assert call["params"]["limit"] == 5
-    assert call["params"]["key"] == "test"
+    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetServersAtAddress/v1/"
+    assert call["params"]["addr"] == "208.64.200.0"
+    assert "key" not in call["params"]
     client.close()
 
 
-def test_news_service_authed_method_uses_api_base_url() -> None:
+def test_news_service_authed_method_uses_public_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"appnews": {}}))
     client = SteamClient(api_key="test", session=session)
 
@@ -202,7 +191,7 @@ def test_news_service_authed_method_uses_api_base_url() -> None:
     client.close()
 
 
-def test_store_service_uses_api_base_url() -> None:
+def test_store_service_uses_public_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"items": []}}))
     client = SteamClient(api_key="test", session=session)
 
@@ -256,21 +245,6 @@ def test_remote_storage_public_details_use_public_base_url() -> None:
     client.close()
 
 
-def test_remote_storage_subscribe_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"result": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.remote_storage.subscribe_published_file("76561197960435530", 570, "123456")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/SubscribePublishedFile/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["publishedfileid"] == "123456"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
 def test_remote_storage_get_ugc_file_details_requires_app_id() -> None:
     session = RecordingSession(DummyResponse(json_data={"data": {"filename": "example"}}))
     client = SteamClient(api_key="test", session=session)
@@ -286,40 +260,7 @@ def test_remote_storage_get_ugc_file_details_requires_app_id() -> None:
     client.close()
 
 
-def test_remote_storage_set_ugc_used_by_gc_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.remote_storage.set_ugc_used_by_gc("76561197960435530", "123456", 570, True)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamRemoteStorage/SetUGCUsedByGC/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["ugcid"] == "123456"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["used"] == 1
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_published_item_voting_uses_api_base_url_and_form_arrays() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"summary": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.published_item_voting.item_vote_summary("76561197960435530", 570, ["123456", "789012"])
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamPublishedItemVoting/ItemVoteSummary/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["count"] == 2
-    assert call["data"]["publishedfileid[0]"] == "123456"
-    assert call["data"]["publishedfileid[1]"] == "789012"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_econ_get_trade_history_uses_api_base_url() -> None:
+def test_econ_get_trade_history_uses_user_key_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"trades": []}}))
     client = SteamClient(api_key="test", session=session)
 
@@ -348,7 +289,7 @@ def test_econ_get_trade_history_uses_api_base_url() -> None:
     client.close()
 
 
-def test_econ_get_trade_offers_uses_api_base_url() -> None:
+def test_econ_get_trade_offers_uses_user_key_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"trade_offers_sent": []}}))
     client = SteamClient(api_key="test", session=session)
 
@@ -372,55 +313,7 @@ def test_econ_get_trade_offers_uses_api_base_url() -> None:
     assert call["params"]["historical_only"] == 0
     assert call["params"]["time_historical_cutoff"] == 0
     assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_econ_flush_inventory_cache_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.econ.flush_inventory_cache("76561197960435530", 730, "2")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IEconService/FlushInventoryCache/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["appid"] == 730
-    assert call["data"]["contextid"] == "2"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_published_item_search_uses_api_base_url_and_tag_arrays() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"results": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.published_item_search.ranked_by_trend(
-        "76561197960435530",
-        570,
-        start_index=0,
-        count=20,
-        days=7,
-        tags=["Maps", "Competitive"],
-        user_tags=["Featured"],
-        has_app_admin_access=True,
-        file_type=0,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamPublishedItemSearch/RankedByTrend/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["startidx"] == 0
-    assert call["data"]["count"] == 20
-    assert call["data"]["days"] == 7
-    assert call["data"]["tagcount"] == 2
-    assert call["data"]["usertagcount"] == 1
-    assert call["data"]["tag[0]"] == "Maps"
-    assert call["data"]["tag[1]"] == "Competitive"
-    assert call["data"]["usertag[0]"] == "Featured"
-    assert call["data"]["hasappadminaccess"] == 1
-    assert call["data"]["fileType"] == 0
-    assert call["params"]["key"] == "test"
+    assert not hasattr(client.econ, "flush_inventory_cache")
     client.close()
 
 
@@ -511,12 +404,63 @@ def test_client_login_to_community_sets_credentials() -> None:
     client.close()
 
 
+def test_community_edit_profile_posts_profile_save_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    client.community.edit_profile(
+        "76561197960435530",
+        persona_name="Example Name",
+        summary="Example summary",
+        custom_url="example-custom-url",
+        country="US",
+        state="FL",
+        city=12345,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://steamcommunity.com/profiles/76561197960435530/edit/"
+    assert call["data"]["sessionID"] == "session123"
+    assert call["data"]["type"] == "profileSave"
+    assert call["data"]["personaName"] == "Example Name"
+    assert call["data"]["summary"] == "Example summary"
+    assert call["data"]["customURL"] == "example-custom-url"
+    assert call["data"]["country"] == "US"
+    assert call["data"]["state"] == "FL"
+    assert call["data"]["city"] == "12345"
+    assert call["data"]["json"] == 1
+    client.close()
+
+
+def test_community_edit_profile_requires_at_least_one_field() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    with pytest.raises(SteamValidationError):
+        client.community.edit_profile("76561197960435530")
+
+    client.close()
+
+
 def test_group_availability_uses_form_data_and_browser_headers() -> None:
     xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<response><fieldId><![CDATA[groupName]]></fieldId>'
-        '<bResults><![CDATA[1]]></bResults>'
-        '<sResults><![CDATA[available]]></sResults></response>'
+        "<response><fieldId><![CDATA[groupName]]></fieldId>"
+        "<bResults><![CDATA[1]]></bResults>"
+        "<sResults><![CDATA[available]]></sResults></response>"
     )
     session = RecordingSession(DummyResponse(text=xml))
     client = SteamClient(api_key="test", session=session)
@@ -544,9 +488,9 @@ def test_group_availability_uses_form_data_and_browser_headers() -> None:
 def test_group_availability_rate_limit_raises_specific_error() -> None:
     xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<response><fieldId><![CDATA[groupName]]></fieldId>'
-        '<bResults><![CDATA[]]></bResults>'
-        '<sResults><![CDATA[You\'ve made too many requests recently. Please wait and try your request again later.]]></sResults></response>'
+        "<response><fieldId><![CDATA[groupName]]></fieldId>"
+        "<bResults><![CDATA[]]></bResults>"
+        "<sResults><![CDATA[You've made too many requests recently. Please wait and try your request again later.]]></sResults></response>"
     )
     session = RecordingSession(DummyResponse(text=xml))
     client = SteamClient(api_key="test", session=session)
