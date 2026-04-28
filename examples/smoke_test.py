@@ -328,6 +328,25 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
             )
         ),
     )
+    run_check(
+        "Market Item Name ID",
+        lambda: str(client.market.get_item_name_id(args.market_app_id, args.market_hash_name)),
+    )
+    run_check(
+        "Market Price History",
+        lambda: "points={0}".format(
+            len(client.market.get_price_history(args.market_app_id, args.market_hash_name).get("prices", []))
+        ),
+    )
+    run_check(
+        "Market Orders Histogram",
+        lambda: "success={0}".format(
+            client.market.get_item_orders_histogram(
+                app_id=args.market_app_id,
+                market_hash_name=args.market_hash_name,
+            ).get("success")
+        ),
+    )
 
 
 def run_community_suite(client: SteamClient, args) -> None:

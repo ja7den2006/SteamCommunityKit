@@ -807,6 +807,56 @@ def test_market_item_listings_uses_listings_render_endpoint() -> None:
     client.close()
 
 
+def test_market_get_item_name_id_parses_listings_page_html() -> None:
+    html = "<script>Market_LoadOrderSpread( 7178002 );</script>"
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(session=session)
+
+    item_name_id = client.market.get_item_name_id(730, "AK-47 | Redline (Field-Tested)")
+
+    assert item_name_id == 7178002
+    assert session.calls[0]["url"] == "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20%28Field-Tested%29"
+    client.close()
+
+
+def test_market_get_item_orders_histogram_uses_item_name_id_lookup() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(text="<script>Market_LoadOrderSpread( 7178002 );</script>"),
+            DummyResponse(json_data={"success": 1, "sell_order_count": "10"}),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.market.get_item_orders_histogram(app_id=730, market_hash_name="AK-47 | Redline (Field-Tested)")
+
+    assert result["success"] == 1
+    assert session.calls[1]["url"] == "https://steamcommunity.com/market/itemordershistogram"
+    assert session.calls[1]["params"]["item_nameid"] == 7178002
+    client.close()
+
+
+def test_market_get_price_history_parses_listings_page_html() -> None:
+    html = """
+    <script>
+    var strFormatPrefix = '$';
+    var strFormatSuffix = '';
+    var line1=[["Feb 21 2014 01: +0",41.405,"198"],["Feb 22 2014 01: +0",35.08,"225"]];
+    </script>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(session=session)
+
+    result = client.market.get_price_history(730, "AK-47 | Redline (Field-Tested)")
+
+    assert result["success"] is True
+    assert result["price_prefix"] == "$"
+    assert result["price_suffix"] == ""
+    assert len(result["prices"]) == 2
+    assert result["prices"][0][0] == "Feb 21 2014 01: +0"
+    client.close()
+
+
 def test_client_can_get_friend_list_for_user_from_profile_url() -> None:
     session = RecordingSession(
         DummyResponse(json_data={"friendslist": {"friends": [{"steamid": "76561197960435530"}]}})
