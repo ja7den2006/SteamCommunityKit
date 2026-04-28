@@ -470,6 +470,63 @@ def test_published_files_query_uses_public_base_url() -> None:
     client.close()
 
 
+def test_published_files_query_summary_normalizes_valid_items_only() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "total": 2,
+                    "next_cursor": "cursor123",
+                    "publishedfiledetails": [
+                        {
+                            "publishedfileid": "123",
+                            "result": 1,
+                            "title": "Example Mod",
+                            "short_description": "Short description",
+                            "creator": "76561197960435530",
+                            "consumer_appid": 570,
+                            "app_name": "Dota 2",
+                            "file_type": 0,
+                            "visibility": 0,
+                            "subscriptions": 12,
+                            "favorited": 3,
+                            "followers": 1,
+                            "views": 50,
+                            "lifetime_subscriptions": 20,
+                            "lifetime_favorited": 4,
+                            "lifetime_followers": 2,
+                            "time_created": 100,
+                            "time_updated": 200,
+                            "preview_url": "https://example.com/preview.jpg",
+                            "previews": [{"url": "https://example.com/p1.jpg"}],
+                            "tags": [{"tag": "Other", "display_name": "Other"}],
+                            "num_children": 0,
+                            "children": [],
+                            "can_subscribe": True,
+                            "can_be_deleted": False,
+                            "banned": False,
+                        },
+                        {
+                            "publishedfileid": "999",
+                            "result": 9,
+                        },
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.published_files.query_files_summary(query_type=0, cursor="*", app_id=570)
+
+    assert result["total"] == 2
+    assert result["next_cursor"] == "cursor123"
+    assert result["item_ids"] == ["123"]
+    assert result["items"][0]["title"] == "Example Mod"
+    assert result["items"][0]["workshop_url"] == "https://steamcommunity.com/sharedfiles/filedetails/?id=123"
+    client.close()
+
+
 def test_remote_storage_public_details_use_public_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"publishedfiledetails": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -481,6 +538,79 @@ def test_remote_storage_public_details_use_public_base_url() -> None:
     assert call["data"]["itemcount"] == 2
     assert call["data"]["publishedfileids[0]"] == "123456"
     assert call["data"]["publishedfileids[1]"] == "789012"
+    client.close()
+
+
+def test_remote_storage_get_published_file_detail_normalizes_result() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "publishedfiledetails": [
+                        {
+                            "publishedfileid": "123",
+                            "result": 1,
+                            "title": "Example Mod",
+                            "short_description": "Short description",
+                            "creator": "76561197960435530",
+                            "consumer_appid": 570,
+                            "app_name": "Dota 2",
+                            "file_type": 0,
+                            "visibility": 0,
+                            "subscriptions": 12,
+                            "favorited": 3,
+                            "followers": 1,
+                            "views": 50,
+                            "lifetime_subscriptions": 20,
+                            "lifetime_favorited": 4,
+                            "lifetime_followers": 2,
+                            "time_created": 100,
+                            "time_updated": 200,
+                            "preview_url": "https://example.com/preview.jpg",
+                            "previews": [{"url": "https://example.com/p1.jpg"}],
+                            "tags": [{"tag": "Other", "display_name": "Other"}],
+                            "num_children": 0,
+                            "children": [],
+                            "can_subscribe": True,
+                            "can_be_deleted": False,
+                            "banned": False,
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.remote_storage.get_published_file_detail("123")
+
+    assert result["published_file_id"] == "123"
+    assert result["title"] == "Example Mod"
+    assert result["preview_urls"] == ["https://example.com/p1.jpg"]
+    assert result["tags"] == ["Other"]
+    client.close()
+
+
+def test_remote_storage_get_published_file_detail_raises_for_invalid_result() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "publishedfiledetails": [
+                        {
+                            "publishedfileid": "123",
+                            "result": 9,
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    with pytest.raises(SteamNotFoundError):
+        client.remote_storage.get_published_file_detail("123")
+
     client.close()
 
 

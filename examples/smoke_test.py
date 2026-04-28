@@ -74,6 +74,7 @@ def configure_community_session(client: SteamClient, args) -> bool:
 
 def run_public_suite(client: SteamClient, args) -> None:
     print_header("Public / API Key Tests")
+    workshop_cache = {}
 
     run_check(
         "Resolve Steam ID From Vanity",
@@ -219,20 +220,25 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Query Published Files",
-        lambda: "total={0}".format(
-            client.published_files.query_files(
+        lambda: _capture_workshop_query_summary(
+            workshop_cache,
+            client.query_published_files(
                 query_type=0,
                 app_id=args.app_id,
                 cursor="*",
                 num_per_page=1,
-                total_only=True,
-            ).get("total", 0)
+                return_short_description=True,
+                return_previews=True,
+                return_tags=True,
+            )
         ),
     )
     run_check(
         "Get Published File Details",
-        lambda: "details={0}".format(
-            len(client.remote_storage.get_published_file_details([args.published_file_id]).get("publishedfiledetails", []))
+        lambda: _format_published_file_detail(
+            client.get_published_file_detail(
+                _require_workshop_item_id(workshop_cache, args)
+            )
         ),
     )
     run_check(
@@ -569,6 +575,31 @@ def _format_inventory_items(payload: dict) -> str:
         len(payload.get("items", [])),
         payload.get("total_inventory_count"),
         payload.get("pages_fetched", 0),
+    )
+
+
+def _capture_workshop_query_summary(cache: dict, payload: dict) -> str:
+    cache["query_published_files"] = payload
+    return "total={0} items={1}".format(
+        payload.get("total"),
+        len(payload.get("items", [])),
+    )
+
+
+def _require_workshop_item_id(cache: dict, args) -> str:
+    payload = cache.get("query_published_files")
+    if payload:
+        item_ids = payload.get("item_ids", [])
+        if item_ids:
+            return item_ids[0]
+    return args.published_file_id
+
+
+def _format_published_file_detail(payload: dict) -> str:
+    return "title={0} app={1} subs={2}".format(
+        payload.get("title", ""),
+        payload.get("app_name") or payload.get("app_id"),
+        payload.get("subscriptions"),
     )
 
 

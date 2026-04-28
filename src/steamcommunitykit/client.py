@@ -136,6 +136,12 @@ class SteamClient:
     def get_all_group_members(self, group_url: str, *, start_page: int = 1, max_pages: Optional[int] = None) -> dict:
         return self.groups.get_all_group_members(group_url, start_page=start_page, max_pages=max_pages)
 
+    def get_published_file_detail(self, published_file_id) -> dict:
+        return self.remote_storage.get_published_file_detail(published_file_id)
+
+    def query_published_files(self, **kwargs) -> dict:
+        return self.published_files.query_files_summary(**kwargs)
+
     def get_inventory_for_user(
         self,
         identifier,

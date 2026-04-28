@@ -4,6 +4,7 @@ from typing import Dict, Optional, Sequence
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
+from steamcommunitykit.services.remote_storage import RemoteStorageService
 from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint64
 
 
@@ -11,6 +12,7 @@ class PublishedFilesService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/IPublishedFileService"
+        self._detail_normalizer = RemoteStorageService.normalize_published_file_detail
 
     def query_files(
         self,
@@ -115,3 +117,15 @@ class PublishedFilesService:
             require_api_key=True,
             service_payload=service_payload,
         )
+
+    def query_files_summary(self, **kwargs) -> dict:
+        payload = self.query_files(**kwargs)
+        details = payload.get("publishedfiledetails", [])
+        valid_details = [detail for detail in details if int(detail.get("result", 0) or 0) == 1]
+        return {
+            "total": payload.get("total"),
+            "next_cursor": payload.get("next_cursor"),
+            "items": [self._detail_normalizer(detail) for detail in valid_details],
+            "item_ids": [detail.get("publishedfileid") for detail in valid_details if detail.get("publishedfileid")],
+            "raw": payload,
+        }
