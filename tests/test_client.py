@@ -352,6 +352,57 @@ def test_users_get_player_summary_resolves_identifier_before_fetch() -> None:
     client.close()
 
 
+def test_users_get_player_summary_falls_back_to_community_xml_without_api_key() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile>
+      <steamID64>76561197968052866</steamID64>
+      <steamID><![CDATA[Gaben]]></steamID>
+      <customURL><![CDATA[gaben]]></customURL>
+      <profileURL><![CDATA[https://steamcommunity.com/id/gaben/]]></profileURL>
+      <avatarIcon><![CDATA[icon.jpg]]></avatarIcon>
+      <avatarMedium><![CDATA[medium.jpg]]></avatarMedium>
+      <avatarFull><![CDATA[full.jpg]]></avatarFull>
+      <privacyState>public</privacyState>
+      <visibilityState>3</visibilityState>
+      <stateMessage><![CDATA[Offline]]></stateMessage>
+      <onlineState>offline</onlineState>
+    </profile>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(session=session)
+
+    summary = client.get_player_summary("gaben")
+
+    assert summary["steamid"] == "76561197968052866"
+    assert summary["personaname"] == "Gaben"
+    assert summary["profileurl"] == "https://steamcommunity.com/id/gaben/"
+    assert summary["avatar"] == "icon.jpg"
+    assert summary["communityvisibilitystate"] == 3
+    assert summary["personastate"] == 0
+    client.close()
+
+
+def test_users_get_player_summaries_fall_back_to_community_xml_without_api_key() -> None:
+    xml_one = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile><steamID64>76561197960435530</steamID64><steamID><![CDATA[Robin]]></steamID><profileURL><![CDATA[https://steamcommunity.com/profiles/76561197960435530/]]></profileURL></profile>
+    """
+    xml_two = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <profile><steamID64>76561197960287930</steamID64><steamID><![CDATA[John]]></steamID><profileURL><![CDATA[https://steamcommunity.com/profiles/76561197960287930/]]></profileURL></profile>
+    """
+    session = SequenceSession([DummyResponse(text=xml_one), DummyResponse(text=xml_two)])
+    client = SteamClient(session=session)
+
+    summaries = client.users.get_player_summaries(["76561197960435530", "76561197960287930"])
+
+    assert len(summaries) == 2
+    assert summaries[0]["personaname"] == "Robin"
+    assert summaries[1]["personaname"] == "John"
+    client.close()
+
+
 def test_apps_service_uses_public_servers_at_address_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"servers": []}}))
     client = SteamClient(api_key="test", session=session)

@@ -69,6 +69,42 @@ class UsersService:
             "raw_xml": response_text,
         }
 
+    @staticmethod
+    def _community_profile_to_summary(profile: dict) -> dict:
+        visibility_state = profile.get("visibility_state")
+        online_state = (profile.get("online_state") or "").lower()
+        personastate_map = {
+            "offline": 0,
+            "online": 1,
+            "busy": 2,
+            "away": 3,
+            "snooze": 4,
+            "looking to trade": 5,
+            "looking to play": 6,
+        }
+        summary = {
+            "steamid": profile.get("steamid", ""),
+            "personaname": profile.get("personaname", ""),
+            "profileurl": profile.get("profile_url", ""),
+            "avatar": profile.get("avatar_icon", ""),
+            "avatarmedium": profile.get("avatar_medium", ""),
+            "avatarfull": profile.get("avatar_full", ""),
+            "communityvisibilitystate": int(visibility_state) if str(visibility_state).isdigit() else None,
+            "personastate": personastate_map.get(online_state),
+            "profilestate": 1 if profile.get("custom_url") else 0,
+            "realname": None,
+            "primaryclanid": None,
+            "timecreated": None,
+            "loccountrycode": None,
+            "locstatecode": None,
+            "loccityid": None,
+            "online_state": profile.get("online_state", ""),
+            "privacy_state": profile.get("privacy_state", ""),
+            "state_message": profile.get("state_message", ""),
+            "custom_url": profile.get("custom_url", ""),
+        }
+        return summary
+
     def resolve_steam_id(self, identifier, url_type=None) -> str:
         parsed = parse_steam_profile_identifier(identifier)
         if parsed["type"] == "steam_id":
@@ -93,6 +129,10 @@ class UsersService:
         )
 
     def get_player_summary(self, identifier, url_type=None) -> dict:
+        if not self.transport.api_key:
+            return self._community_profile_to_summary(
+                self.resolve_community_profile_xml(identifier)
+            )
         steam_id = self.resolve_steam_id(identifier, url_type=url_type)
         players = self.get_player_summaries(steam_id)
         if not players:
@@ -104,6 +144,13 @@ class UsersService:
         return players[0]
 
     def get_player_summaries(self, steam_ids) -> list:
+        if not self.transport.api_key:
+            return [
+                self._community_profile_to_summary(
+                    self.resolve_community_profile_xml(steam_id)
+                )
+                for steam_id in normalize_steam_ids(steam_ids)
+            ]
         players = []
         normalized = normalize_steam_ids(steam_ids)
         for offset in range(0, len(normalized), 100):

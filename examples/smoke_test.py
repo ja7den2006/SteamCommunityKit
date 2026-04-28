@@ -316,6 +316,10 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         lambda: "persona={0}".format(client.users.resolve_community_profile_xml(args.profile_identifier).get("personaname", "")),
     )
     run_check(
+        "Get Player Summary (Community XML)",
+        lambda: client.get_player_summary(args.profile_identifier).get("personaname", "<no personaname>"),
+    )
+    run_check(
         "Market Price Overview",
         lambda: str(client.market.get_price_overview(args.market_app_id, args.market_hash_name)),
     )
