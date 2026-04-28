@@ -526,6 +526,55 @@ def test_community_edit_profile_posts_profile_save_payload() -> None:
     client.close()
 
 
+def test_community_get_account_info_parses_embedded_json() -> None:
+    html = """
+    <div id="profile_edit_config"
+         data-userinfo="{&quot;logged_in&quot;:true,&quot;steamid&quot;:&quot;76561197960435530&quot;,&quot;account_name&quot;:&quot;tester&quot;,&quot;is_limited&quot;:false}"
+         data-profile-edit="{&quot;strPersonaName&quot;:&quot;Example&quot;,&quot;Privacy&quot;:{&quot;PrivacySettings&quot;:{&quot;PrivacyProfile&quot;:1},&quot;eCommentPermission&quot;:0}}"></div>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    info = client.community.get_account_info()
+
+    assert info["logged_in"] is True
+    assert info["steamid"] == "76561197960435530"
+    assert info["account_name"] == "tester"
+    assert info["is_limited"] is False
+    client.close()
+
+
+def test_community_get_profile_privacy_parses_embedded_json() -> None:
+    html = """
+    <div id="profile_edit_config"
+         data-userinfo="{&quot;logged_in&quot;:true}"
+         data-profile-edit="{&quot;strPersonaName&quot;:&quot;Example&quot;,&quot;Privacy&quot;:{&quot;PrivacySettings&quot;:{&quot;PrivacyProfile&quot;:1,&quot;PrivacyInventory&quot;:2},&quot;eCommentPermission&quot;:0}}"></div>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    privacy = client.community.get_profile_privacy()
+
+    assert privacy["PrivacySettings"]["PrivacyProfile"] == 1
+    assert privacy["PrivacySettings"]["PrivacyInventory"] == 2
+    assert privacy["eCommentPermission"] == 0
+    client.close()
+
+
 def test_community_edit_profile_requires_at_least_one_field() -> None:
     client = SteamClient(api_key="test")
     client.set_community_credentials(
@@ -539,6 +588,75 @@ def test_community_edit_profile_requires_at_least_one_field() -> None:
     with pytest.raises(SteamValidationError):
         client.community.edit_profile()
 
+    client.close()
+
+
+def test_groups_get_group_details_parses_memberslist_xml() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <memberList>
+      <groupID64>103582791429521412</groupID64>
+      <groupDetails>
+        <groupName><![CDATA[Valve]]></groupName>
+        <groupURL><![CDATA[Valve]]></groupURL>
+        <headline><![CDATA[VALVE]]></headline>
+        <summary><![CDATA[Test summary]]></summary>
+        <avatarIcon><![CDATA[https://example.com/icon.jpg]]></avatarIcon>
+        <avatarMedium><![CDATA[https://example.com/medium.jpg]]></avatarMedium>
+        <avatarFull><![CDATA[https://example.com/full.jpg]]></avatarFull>
+        <memberCount>152</memberCount>
+        <membersInChat>53</membersInChat>
+        <membersInGame>0</membersInGame>
+        <membersOnline>67</membersOnline>
+      </groupDetails>
+      <memberCount>152</memberCount>
+      <totalPages>3</totalPages>
+      <currentPage>2</currentPage>
+    </memberList>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(api_key="test", session=session)
+
+    details = client.groups.get_group_details("Valve", page=2)
+
+    assert details["group_id64"] == "103582791429521412"
+    assert details["group_name"] == "Valve"
+    assert details["group_url"] == "Valve"
+    assert details["headline"] == "VALVE"
+    assert details["summary"] == "Test summary"
+    assert details["member_count"] == 152
+    assert details["members_in_chat"] == 53
+    assert details["members_in_game"] == 0
+    assert details["members_online"] == 67
+    assert details["total_pages"] == 3
+    assert details["current_page"] == 2
+    client.close()
+
+
+def test_groups_get_group_members_parses_member_ids() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <memberList>
+      <groupID64>103582791429521412</groupID64>
+      <memberCount>152</memberCount>
+      <totalPages>3</totalPages>
+      <currentPage>1</currentPage>
+      <members>
+        <steamID64>76561197985607672</steamID64>
+        <steamID64>76561197960435530</steamID64>
+      </members>
+    </memberList>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(api_key="test", session=session)
+
+    members = client.groups.get_group_members("Valve", page=1)
+
+    assert members["group_id64"] == "103582791429521412"
+    assert members["member_count"] == 152
+    assert members["total_pages"] == 3
+    assert members["current_page"] == 1
+    assert members["members"] == ["76561197985607672", "76561197960435530"]
     client.close()
 
 

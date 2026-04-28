@@ -39,6 +39,15 @@ class GroupsService:
             "X-Requested-With": "XMLHttpRequest",
         }
 
+    @staticmethod
+    def _parse_xml(text: str, error_prefix: str):
+        try:
+            return ET.fromstring(text.lstrip())
+        except ET.ParseError as exc:
+            raise SteamResponseError(
+                f"{error_prefix}: {text[:500]}"
+            ) from exc
+
     def _availability_check(self, check_type: str, value: str) -> AvailabilityResult:
         response_text = self.transport.request(
             "POST",
@@ -48,12 +57,10 @@ class GroupsService:
             cookies=self._community_cookies(),
             expected="text",
         )
-        try:
-            root = ET.fromstring(response_text)
-        except ET.ParseError as exc:
-            raise SteamResponseError(
-                f"Unexpected XML returned from Steam group availability check: {response_text[:500]}"
-            ) from exc
+        root = self._parse_xml(
+            response_text,
+            "Unexpected XML returned from Steam group availability check",
+        )
         field_id = root.findtext("fieldId")
         raw_available = root.findtext("bResults")
         message = (root.findtext("sResults") or root.findtext("results") or "").strip()
@@ -96,12 +103,10 @@ class GroupsService:
             cookies=self._community_cookies(),
             expected="text",
         )
-        try:
-            root = ET.fromstring(response_text)
-        except ET.ParseError as exc:
-            raise SteamResponseError(
-                f"Unexpected XML returned while fetching group id64: {response_text[:500]}"
-            ) from exc
+        root = self._parse_xml(
+            response_text,
+            "Unexpected XML returned while fetching group id64",
+        )
         group_id64 = root.findtext("groupID64")
         if not group_id64:
             raise SteamResponseError("Steam did not return groupID64 for the requested group.")
@@ -122,6 +127,58 @@ class GroupsService:
             raise SteamResponseError("Unable to locate the group id field in the edit page.")
         group_id = tail.split("<div class=\"formRowFields\">", 1)[1].split("</div>", 1)[0]
         return group_id.strip()
+
+    def get_group_details(self, group_url: str, page: int = 1) -> dict:
+        response_text = self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
+            params={"xml": "1", "p": int(page)},
+            expected="text",
+        )
+        root = self._parse_xml(
+            response_text,
+            "Unexpected XML returned while fetching group details",
+        )
+        details = root.find("groupDetails")
+        if details is None:
+            raise SteamResponseError("Steam did not return groupDetails for the requested group.")
+        return {
+            "group_id64": root.findtext("groupID64"),
+            "group_name": details.findtext("groupName"),
+            "group_url": details.findtext("groupURL"),
+            "headline": details.findtext("headline"),
+            "summary": details.findtext("summary"),
+            "avatar_icon": details.findtext("avatarIcon"),
+            "avatar_medium": details.findtext("avatarMedium"),
+            "avatar_full": details.findtext("avatarFull"),
+            "member_count": int(details.findtext("memberCount") or 0),
+            "members_in_chat": int(details.findtext("membersInChat") or 0),
+            "members_in_game": int(details.findtext("membersInGame") or 0),
+            "members_online": int(details.findtext("membersOnline") or 0),
+            "total_pages": int(root.findtext("totalPages") or 0),
+            "current_page": int(root.findtext("currentPage") or page),
+        }
+
+    def get_group_members(self, group_url: str, page: int = 1) -> dict:
+        response_text = self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
+            params={"xml": "1", "p": int(page)},
+            expected="text",
+        )
+        root = self._parse_xml(
+            response_text,
+            "Unexpected XML returned while fetching group members",
+        )
+        member_nodes = root.findall("./members/steamID64")
+        return {
+            "group_id64": root.findtext("groupID64"),
+            "group_url": group_url,
+            "current_page": int(root.findtext("currentPage") or page),
+            "total_pages": int(root.findtext("totalPages") or 0),
+            "member_count": int(root.findtext("memberCount") or 0),
+            "members": [member.text for member in member_nodes if member.text],
+        }
 
     def create_group(
         self,

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import html
+import json
 import mimetypes
+import re
 from pathlib import Path
 from typing import Dict, Optional, Union
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
-from steamcommunitykit.exceptions import SteamValidationError
+from steamcommunitykit.exceptions import SteamResponseError, SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
 
@@ -13,6 +16,21 @@ from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
 class CommunityService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
+
+    @staticmethod
+    def _extract_json_data_attribute(html_text: str, attribute_name: str) -> dict:
+        pattern = r'{0}="([^"]+)"'.format(re.escape(attribute_name))
+        match = re.search(pattern, html_text)
+        if not match:
+            raise SteamResponseError(
+                "Steam did not expose the expected {0} attribute.".format(attribute_name)
+            )
+        try:
+            return json.loads(html.unescape(match.group(1)))
+        except json.JSONDecodeError as exc:
+            raise SteamResponseError(
+                "Steam returned malformed JSON inside {0}.".format(attribute_name)
+            ) from exc
 
     def _resolved_steam_id(self, steam_id=None) -> str:
         if steam_id is None:
@@ -34,6 +52,34 @@ class CommunityService:
             "Referer": referer,
             "X-Requested-With": "XMLHttpRequest",
         }
+
+    def _fetch_edit_page_html(self, steam_id=None) -> str:
+        normalized_steam_id = self._resolved_steam_id(steam_id)
+        return self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/",
+            cookies=self._community_cookies(),
+            expected="text",
+        )
+
+    def get_account_info(self, steam_id=None) -> dict:
+        return self._extract_json_data_attribute(
+            self._fetch_edit_page_html(steam_id),
+            "data-userinfo",
+        )
+
+    def get_profile_edit_state(self, steam_id=None) -> dict:
+        return self._extract_json_data_attribute(
+            self._fetch_edit_page_html(steam_id),
+            "data-profile-edit",
+        )
+
+    def get_profile_privacy(self, steam_id=None) -> dict:
+        profile_state = self.get_profile_edit_state(steam_id)
+        privacy = profile_state.get("Privacy")
+        if not isinstance(privacy, dict):
+            raise SteamResponseError("Steam did not include profile privacy data on the edit page.")
+        return privacy
 
     def set_profile_privacy(
         self,
