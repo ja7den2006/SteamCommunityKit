@@ -10,7 +10,7 @@ import rsa
 from steamcommunitykit.constants import COMMUNITY_BASE_URL, QR_IMAGE_BASE_URL, WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult, QRAuthSession
-from steamcommunitykit.utils import ensure_not_blank, validate_steam_id
+from steamcommunitykit.utils import ensure_not_blank, parse_cookie_string, validate_steam_id
 
 
 class AuthenticationService:
@@ -192,6 +192,51 @@ class AuthenticationService:
             session_id=session_id,
             access_token=login_result.access_token,
             steam_login_secure=steam_login_secure,
+        )
+
+    def community_credentials_from_refresh_token(
+        self,
+        refresh_token: str,
+        *,
+        session_id: str = None,
+    ) -> CommunityCredentials:
+        normalized_refresh_token = ensure_not_blank(refresh_token, "refresh_token")
+        claims = self.decode_jwt(normalized_refresh_token)
+        steam_id = validate_steam_id(claims.get("sub"), "steam_id")
+        resolved_session_id = ensure_not_blank(session_id, "session_id") if session_id else self.create_session_id()
+        response = self.set_community_login_cookie(
+            refresh_token=normalized_refresh_token,
+            session_id=resolved_session_id,
+            steam_id=steam_id,
+        )
+        steam_login_secure = response.cookies.get("steamLoginSecure")
+        if not steam_login_secure:
+            raise RuntimeError("Steam did not return a steamLoginSecure cookie.")
+        return CommunityCredentials(
+            steam_id=steam_id,
+            session_id=resolved_session_id,
+            refresh_token=normalized_refresh_token,
+            steam_login_secure=steam_login_secure,
+        )
+
+    def community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:
+        cookies = parse_cookie_string(cookie_string)
+        session_id = cookies.get("sessionid")
+        steam_login_secure = cookies.get("steamLoginSecure")
+        if not session_id:
+            raise RuntimeError("cookie_string must contain a sessionid cookie.")
+        if not steam_login_secure:
+            raise RuntimeError("cookie_string must contain a steamLoginSecure cookie.")
+        return CommunityCredentials.from_cookie_pair(
+            session_id=session_id,
+            steam_login_secure=steam_login_secure,
+        )
+
+    @staticmethod
+    def export_cookie_string(credentials: CommunityCredentials) -> str:
+        return "sessionid={0}; steamLoginSecure={1}".format(
+            credentials.session_id,
+            credentials.steam_login_secure_value,
         )
 
     @staticmethod

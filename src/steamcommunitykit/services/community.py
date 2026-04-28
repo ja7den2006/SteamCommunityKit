@@ -14,6 +14,11 @@ class CommunityService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
 
+    def _resolved_steam_id(self, steam_id=None) -> str:
+        if steam_id is None:
+            return self.transport.require_community_credentials().steam_id
+        return validate_steam_id(steam_id)
+
     def _community_cookies(self) -> Dict[str, str]:
         credentials = self.transport.require_community_credentials()
         return {
@@ -32,7 +37,7 @@ class CommunityService:
 
     def set_profile_privacy(
         self,
-        steam_id,
+        steam_id=None,
         *,
         privacy_profile: int = 1,
         privacy_inventory: int = 2,
@@ -43,6 +48,7 @@ class CommunityService:
         comment_permission: int = 0,
     ) -> dict:
         credentials = self.transport.require_community_credentials()
+        normalized_steam_id = self._resolved_steam_id(steam_id)
         privacy_payload = (
             "{"
             f"\"PrivacyProfile\":{int(privacy_profile)},"
@@ -55,20 +61,20 @@ class CommunityService:
         )
         response = self.transport.request(
             "POST",
-            f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/ajaxsetprivacy/",
+            f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/ajaxsetprivacy/",
             data={
                 "sessionid": credentials.session_id,
                 "Privacy": privacy_payload,
                 "eCommentPermission": str(comment_permission),
             },
             headers=self._headers(
-                f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/settings"
+                f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/settings"
             ),
             cookies=self._community_cookies(),
         )
         return response
 
-    def update_persona_name(self, steam_id, persona_name: str) -> dict:
+    def update_persona_name(self, steam_id=None, persona_name: str = "") -> dict:
         return self.edit_profile(
             steam_id,
             persona_name=persona_name,
@@ -76,7 +82,7 @@ class CommunityService:
 
     def edit_profile(
         self,
-        steam_id,
+        steam_id=None,
         *,
         persona_name: Optional[str] = None,
         real_name: Optional[str] = None,
@@ -88,7 +94,7 @@ class CommunityService:
         hide_profile_awards: bool = False,
     ) -> dict:
         credentials = self.transport.require_community_credentials()
-        normalized_steam_id = validate_steam_id(steam_id)
+        normalized_steam_id = self._resolved_steam_id(steam_id)
         data = {
             "sessionID": credentials.session_id,
             "type": "profileSave",
@@ -130,8 +136,9 @@ class CommunityService:
             cookies=self._community_cookies(),
         )
 
-    def upload_avatar(self, steam_id, image_path: Union[str, Path]) -> dict:
+    def upload_avatar(self, image_path: Union[str, Path], steam_id=None) -> dict:
         credentials = self.transport.require_community_credentials()
+        normalized_steam_id = self._resolved_steam_id(steam_id)
         path = Path(image_path)
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -141,14 +148,14 @@ class CommunityService:
                 f"{COMMUNITY_BASE_URL}/actions/FileUploader/",
                 data={
                     "type": "player_avatar_image",
-                    "sId": validate_steam_id(steam_id),
+                    "sId": normalized_steam_id,
                     "sessionid": credentials.session_id,
                     "doSub": "1",
                     "json": "1",
                 },
                 files={"avatar": (path.name, handle, mime_type or "application/octet-stream")},
                 cookies=self._community_cookies(),
-                headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{validate_steam_id(steam_id)}/edit/avatar"),
+                headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/avatar"),
                 timeout=self.transport.timeout,
             )
         if response.status_code >= 400:

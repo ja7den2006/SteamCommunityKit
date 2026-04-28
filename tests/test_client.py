@@ -151,6 +151,18 @@ def test_community_credentials_build_cookie_from_access_token() -> None:
     assert credentials.steam_login_secure_value == "76561197960435530%7C%7Ctoken123"
 
 
+def test_community_credentials_can_be_created_from_cookie_pair() -> None:
+    credentials = CommunityCredentials.from_cookie_pair(
+        session_id="session123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    assert credentials.access_token == "token123"
+    assert credentials.steam_login_secure == "76561197960435530%7C%7Ctoken123"
+
+
 def test_users_service_uses_public_player_summaries_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"players": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -404,6 +416,82 @@ def test_client_login_to_community_sets_credentials() -> None:
     client.close()
 
 
+def test_client_can_set_community_credentials_from_cookie_string() -> None:
+    client = SteamClient(api_key="test")
+
+    credentials = client.set_community_credentials_from_cookie_string(
+        "sessionid=session123; steamLoginSecure=76561197960435530%7C%7Ctoken123"
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    assert credentials.access_token == "token123"
+    assert client._transport.community_credentials == credentials
+    client.close()
+
+
+def test_client_can_export_community_cookie_string() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    cookie_string = client.export_community_cookie_string()
+
+    assert cookie_string == "sessionid=session123; steamLoginSecure=76561197960435530%7C%7Ctoken123"
+    client.close()
+
+
+def test_client_can_login_with_refresh_token() -> None:
+    client = SteamClient(api_key="test")
+    expected_credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    original_method = client.auth.community_credentials_from_refresh_token
+    client.auth.community_credentials_from_refresh_token = lambda token: expected_credentials
+
+    returned = client.login_to_community_with_refresh_token("refresh123")
+
+    client.auth.community_credentials_from_refresh_token = original_method
+
+    assert returned == expected_credentials
+    assert client._transport.community_credentials == expected_credentials
+    client.close()
+
+
+def test_auth_can_build_community_credentials_from_refresh_token() -> None:
+    response = DummyResponse(json_data={"response": {"ok": True}})
+    response.cookies = {"steamLoginSecure": "76561197960435530%7C%7Ctoken123"}
+    client = SteamClient(api_key="test")
+
+    original_decode = client.auth.decode_jwt
+    original_create_session = client.auth.create_session_id
+    original_set_cookie = client.auth.set_community_login_cookie
+
+    client.auth.decode_jwt = lambda token: {"sub": "76561197960435530"}
+    client.auth.create_session_id = lambda: "session123"
+    client.auth.set_community_login_cookie = lambda **kwargs: response
+
+    credentials = client.auth.community_credentials_from_refresh_token("refresh123")
+
+    client.auth.decode_jwt = original_decode
+    client.auth.create_session_id = original_create_session
+    client.auth.set_community_login_cookie = original_set_cookie
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    assert credentials.refresh_token == "refresh123"
+    assert credentials.steam_login_secure == "76561197960435530%7C%7Ctoken123"
+    client.close()
+
+
 def test_community_edit_profile_posts_profile_save_payload() -> None:
     session = RecordingSession(DummyResponse(json_data={"success": 1}))
     client = SteamClient(api_key="test", session=session)
@@ -416,7 +504,6 @@ def test_community_edit_profile_posts_profile_save_payload() -> None:
     )
 
     client.community.edit_profile(
-        "76561197960435530",
         persona_name="Example Name",
         summary="Example summary",
         custom_url="example-custom-url",
@@ -450,7 +537,7 @@ def test_community_edit_profile_requires_at_least_one_field() -> None:
     )
 
     with pytest.raises(SteamValidationError):
-        client.community.edit_profile("76561197960435530")
+        client.community.edit_profile()
 
     client.close()
 

@@ -69,6 +69,19 @@ class SteamClient:
     def set_community_credentials(self, credentials: CommunityCredentials) -> None:
         self._transport.community_credentials = credentials
 
+    def set_community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:
+        credentials = self.auth.community_credentials_from_cookie_string(cookie_string)
+        self.set_community_credentials(credentials)
+        return credentials
+
+    def login_to_community_with_refresh_token(self, refresh_token: str) -> CommunityCredentials:
+        credentials = self.auth.community_credentials_from_refresh_token(refresh_token)
+        self.set_community_credentials(credentials)
+        return credentials
+
+    def export_community_cookie_string(self) -> str:
+        return self.auth.export_cookie_string(self._transport.require_community_credentials())
+
     def login_to_community(
         self,
         account_name: str,

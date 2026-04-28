@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable, List, Union
+from typing import Dict, Iterable, List, Union
 
 from steamcommunitykit.exceptions import SteamValidationError
 
@@ -115,6 +115,23 @@ def normalize_uint64_ids(
     if not normalized:
         raise SteamValidationError("{0} cannot be empty.".format(field_name))
     return normalized
+
+
+def parse_cookie_string(cookie_string: str) -> Dict[str, str]:
+    normalized = ensure_not_blank(cookie_string, "cookie_string")
+    cookies = {}
+    for part in normalized.split(";"):
+        fragment = part.strip()
+        if not fragment or "=" not in fragment:
+            continue
+        key, value = fragment.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key:
+            cookies[key] = value
+    if not cookies:
+        raise SteamValidationError("cookie_string did not contain any valid cookies.")
+    return cookies
 
 
 def load_api_key_from_json(path: Union[str, Path]) -> str:
