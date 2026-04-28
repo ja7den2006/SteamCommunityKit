@@ -7,6 +7,7 @@ from steamcommunitykit import (
     SteamClient,
     SteamNotFoundError,
     SteamRateLimitError,
+    SteamResponseError,
     SteamValidationError,
     account_id_to_steam_id,
     build_trade_offer_url,
@@ -162,6 +163,21 @@ def test_client_does_not_require_api_key_at_construction() -> None:
     assert client.community is not None
     assert client.groups is not None
 
+    client.close()
+
+
+def test_client_can_get_community_profile_bundle() -> None:
+    client = SteamClient()
+    expected = {"account_info": {"steamid": "1"}, "profile_edit_state": {"strPersonaName": "x"}, "privacy": {}}
+
+    original_method = client.community.get_profile_bundle
+    client.community.get_profile_bundle = lambda steam_id=None: expected
+
+    result = client.get_community_profile_bundle()
+
+    client.community.get_profile_bundle = original_method
+
+    assert result == expected
     client.close()
 
 
@@ -801,6 +817,23 @@ def test_community_edit_profile_posts_profile_save_payload() -> None:
     client.close()
 
 
+def test_community_edit_profile_raises_on_error_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 2, "errmsg": "Bad value<br />"}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    with pytest.raises(SteamResponseError, match="Profile update failed: Bad value"):
+        client.community.edit_profile(persona_name="bad")
+
+    client.close()
+
+
 def test_community_get_account_info_parses_embedded_json() -> None:
     html = """
     <div id="profile_edit_config"
@@ -847,6 +880,31 @@ def test_community_get_profile_privacy_parses_embedded_json() -> None:
     assert privacy["PrivacySettings"]["PrivacyProfile"] == 1
     assert privacy["PrivacySettings"]["PrivacyInventory"] == 2
     assert privacy["eCommentPermission"] == 0
+    client.close()
+
+
+def test_community_get_profile_bundle_parses_embedded_json_once() -> None:
+    html = """
+    <div id="profile_edit_config"
+         data-userinfo="{&quot;logged_in&quot;:true,&quot;steamid&quot;:&quot;76561197960435530&quot;,&quot;account_name&quot;:&quot;tester&quot;}"
+         data-profile-edit="{&quot;strPersonaName&quot;:&quot;Example&quot;,&quot;Privacy&quot;:{&quot;PrivacySettings&quot;:{&quot;PrivacyProfile&quot;:1,&quot;PrivacyInventory&quot;:2},&quot;eCommentPermission&quot;:0}}"></div>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    bundle = client.community.get_profile_bundle()
+
+    assert bundle["account_info"]["account_name"] == "tester"
+    assert bundle["profile_edit_state"]["strPersonaName"] == "Example"
+    assert bundle["privacy"]["PrivacySettings"]["PrivacyInventory"] == 2
+    assert len(session.calls) == 1
     client.close()
 
 
@@ -942,6 +1000,79 @@ def test_community_edit_profile_requires_at_least_one_field() -> None:
     with pytest.raises(SteamValidationError):
         client.community.edit_profile()
 
+    client.close()
+
+
+def test_community_update_custom_url_calls_edit_profile() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    client.community.update_custom_url("example-url")
+
+    call = session.calls[0]
+    assert call["data"]["customURL"] == "example-url"
+    client.close()
+
+
+def test_community_set_profile_private_uses_private_values() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    client.community.set_profile_private()
+
+    call = session.calls[0]
+    assert '"PrivacyProfile":1' in call["data"]["Privacy"]
+    assert '"PrivacyOwnedGames":1' in call["data"]["Privacy"]
+    client.close()
+
+
+def test_community_set_profile_privacy_raises_on_error_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 2, "errmsg": "Denied<br />"}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    with pytest.raises(SteamResponseError, match="Profile privacy update failed: Denied"):
+        client.community.set_profile_private()
+
+    client.close()
+
+
+def test_community_set_profile_public_uses_public_values() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    client.community.set_profile_public()
+
+    call = session.calls[0]
+    assert '"PrivacyProfile":3' in call["data"]["Privacy"]
+    assert '"PrivacyFriendsList":3' in call["data"]["Privacy"]
     client.close()
 
 

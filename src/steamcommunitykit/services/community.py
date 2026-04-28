@@ -38,6 +38,16 @@ class CommunityService:
                 "Steam returned malformed JSON inside {0}.".format(attribute_name)
             ) from exc
 
+    @staticmethod
+    def _ensure_ajax_success(response: dict, action: str) -> dict:
+        success = response.get("success")
+        error_message = html.unescape(str(response.get("errmsg", "")).replace("<br />", " ").strip())
+        if success == 1:
+            return response
+        if error_message:
+            raise SteamResponseError("{0} failed: {1}".format(action, error_message))
+        raise SteamResponseError("{0} failed.".format(action))
+
     def _resolved_steam_id(self, steam_id=None) -> str:
         if steam_id is None:
             return self.transport.require_community_credentials().steam_id
@@ -77,6 +87,19 @@ class CommunityService:
             expected="text",
         )
 
+    def get_profile_bundle(self, steam_id=None) -> dict:
+        html_text = self._fetch_edit_page_html(steam_id)
+        account_info = self._extract_json_data_attribute(html_text, "data-userinfo")
+        profile_edit_state = self._extract_json_data_attribute(html_text, "data-profile-edit")
+        privacy = profile_edit_state.get("Privacy")
+        if not isinstance(privacy, dict):
+            raise SteamResponseError("Steam did not include profile privacy data on the edit page.")
+        return {
+            "account_info": account_info,
+            "profile_edit_state": profile_edit_state,
+            "privacy": privacy,
+        }
+
     def get_account_info(self, steam_id=None) -> dict:
         return self._extract_json_data_attribute(
             self._fetch_edit_page_html(steam_id),
@@ -84,17 +107,10 @@ class CommunityService:
         )
 
     def get_profile_edit_state(self, steam_id=None) -> dict:
-        return self._extract_json_data_attribute(
-            self._fetch_edit_page_html(steam_id),
-            "data-profile-edit",
-        )
+        return self.get_profile_bundle(steam_id)["profile_edit_state"]
 
     def get_profile_privacy(self, steam_id=None) -> dict:
-        profile_state = self.get_profile_edit_state(steam_id)
-        privacy = profile_state.get("Privacy")
-        if not isinstance(privacy, dict):
-            raise SteamResponseError("Steam did not include profile privacy data on the edit page.")
-        return privacy
+        return self.get_profile_bundle(steam_id)["privacy"]
 
     def get_trade_offer_url(self, steam_id=None) -> dict:
         html_text = self._fetch_trade_privacy_page_html(steam_id)
@@ -202,12 +218,69 @@ class CommunityService:
             ),
             cookies=self._community_cookies(),
         )
-        return response
+        return self._ensure_ajax_success(response, "Profile privacy update")
 
     def update_persona_name(self, steam_id=None, persona_name: str = "") -> dict:
         return self.edit_profile(
             steam_id,
             persona_name=persona_name,
+        )
+
+    def update_custom_url(self, custom_url: str, steam_id=None) -> dict:
+        return self.edit_profile(
+            steam_id,
+            custom_url=custom_url,
+        )
+
+    def update_real_name(self, real_name: str, steam_id=None) -> dict:
+        return self.edit_profile(
+            steam_id,
+            real_name=real_name,
+        )
+
+    def update_summary(self, summary: str, steam_id=None) -> dict:
+        return self.edit_profile(
+            steam_id,
+            summary=summary,
+        )
+
+    def update_location(
+        self,
+        *,
+        country: str,
+        steam_id=None,
+        state: Optional[str] = None,
+        city: Optional[Union[int, str]] = None,
+    ) -> dict:
+        return self.edit_profile(
+            steam_id,
+            country=country,
+            state=state,
+            city=city,
+        )
+
+    def set_profile_public(self, steam_id=None) -> dict:
+        return self.set_profile_privacy(
+            steam_id,
+            privacy_profile=3,
+            privacy_inventory=3,
+            privacy_inventory_gifts=3,
+            privacy_owned_games=3,
+            privacy_playtime=3,
+            privacy_friends_list=3,
+            comment_permission=0,
+        )
+
+    def set_profile_private(self, steam_id=None) -> dict:
+        return self.set_profile_privacy(
+            steam_id,
+            privacy_profile=1,
+            privacy_inventory=1,
+            privacy_inventory_gifts=1,
+            privacy_owned_games=1,
+            privacy_playtime=1,
+            privacy_friends_list=1,
+            comment_permission=0,
         )
 
     def edit_profile(
@@ -258,13 +331,14 @@ class CommunityService:
         if not any(field in data for field in editable_fields):
             raise SteamValidationError("edit_profile requires at least one editable field.")
 
-        return self.transport.request(
+        response = self.transport.request(
             "POST",
             f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/",
             data=data,
             headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/"),
             cookies=self._community_cookies(),
         )
+        return self._ensure_ajax_success(response, "Profile update")
 
     def upload_avatar(self, image_path: Union[str, Path], steam_id=None) -> dict:
         credentials = self.transport.require_community_credentials()

@@ -309,21 +309,20 @@ def run_community_suite(client: SteamClient, args) -> None:
     cache = {}
 
     run_check(
+        "Get Profile Bundle",
+        lambda: _capture_profile_bundle(cache, client),
+    )
+    run_check(
         "Get Account Info",
-        lambda: _capture_result(cache, "account_info", client.community.get_account_info, str),
+        lambda: str(_require_cached(cache, "account_info")),
     )
     run_check(
         "Get Profile Edit State",
-        lambda: _capture_result(
-            cache,
-            "profile_edit_state",
-            client.community.get_profile_edit_state,
-            lambda payload: "persona={0}".format(payload.get("strPersonaName", "")),
-        ),
+        lambda: "persona={0}".format(_require_cached(cache, "profile_edit_state").get("strPersonaName", "")),
     )
     run_check(
         "Get Profile Privacy",
-        lambda: _capture_result(cache, "profile_privacy", client.community.get_profile_privacy, str),
+        lambda: str(_require_cached(cache, "profile_privacy")),
     )
     run_check(
         "Get Trade Offer URL",
@@ -387,6 +386,26 @@ def run_community_suite(client: SteamClient, args) -> None:
                 cache.get("profile_privacy") or client.community.get_profile_privacy(),
             ),
         )
+        if args.set_persona_name:
+            run_check(
+                "Write Check: Set Persona Name",
+                lambda: str(client.community.update_persona_name(persona_name=args.set_persona_name)),
+            )
+        if args.set_custom_url:
+            run_check(
+                "Write Check: Set Custom URL",
+                lambda: str(client.community.update_custom_url(args.set_custom_url)),
+            )
+        if args.set_real_name:
+            run_check(
+                "Write Check: Set Real Name",
+                lambda: str(client.community.update_real_name(args.set_real_name)),
+            )
+        if args.set_summary:
+            run_check(
+                "Write Check: Set Summary",
+                lambda: str(client.community.update_summary(args.set_summary)),
+            )
 
     if args.rotate_trade_url:
         run_check(
@@ -490,6 +509,24 @@ def _expect_limited_group_creation_denial(client: SteamClient) -> str:
     raise AssertionError("Expected Steam to reject group creation for a limited account.")
 
 
+def _capture_profile_bundle(cache: dict, client: SteamClient) -> str:
+    bundle = client.get_community_profile_bundle()
+    cache["profile_bundle"] = bundle
+    cache["account_info"] = bundle["account_info"]
+    cache["profile_edit_state"] = bundle["profile_edit_state"]
+    cache["profile_privacy"] = bundle["privacy"]
+    return "steamid={0} persona={1}".format(
+        bundle["account_info"].get("steamid", "<unknown>"),
+        bundle["profile_edit_state"].get("strPersonaName", ""),
+    )
+
+
+def _require_cached(cache: dict, key: str):
+    if key not in cache:
+        raise RuntimeError("Expected cached community profile data for {0}.".format(key))
+    return cache[key]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SteamCommunityKit smoke test for both public API-key flows and logged-in community flows."
@@ -553,6 +590,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run safe-ish write checks like profile edit using the current persona name.",
     )
+    parser.add_argument("--set-persona-name", help="Optional persona name to set during write checks.")
+    parser.add_argument("--set-custom-url", help="Optional custom profile URL slug to set during write checks.")
+    parser.add_argument("--set-real-name", help="Optional real name to set during write checks.")
+    parser.add_argument("--set-summary", help="Optional profile summary to set during write checks.")
     parser.add_argument(
         "--rotate-trade-url",
         action="store_true",

@@ -133,6 +133,9 @@ class SteamClient:
     def export_community_cookie_string(self) -> str:
         return self.auth.export_cookie_string(self._transport.require_community_credentials())
 
+    def get_community_profile_bundle(self, steam_id=None) -> dict:
+        return self.community.get_profile_bundle(steam_id)
+
     def login_to_community(
         self,
         account_name: str,
