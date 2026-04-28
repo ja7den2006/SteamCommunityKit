@@ -17,6 +17,57 @@ class InventoryService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
 
+    @staticmethod
+    def _normalize_description(description: Optional[dict]) -> Optional[dict]:
+        if not description:
+            return None
+        return {
+            "app_id": description.get("appid"),
+            "class_id": description.get("classid"),
+            "instance_id": description.get("instanceid"),
+            "name": description.get("name") or "",
+            "market_name": description.get("market_name") or "",
+            "market_hash_name": description.get("market_hash_name") or "",
+            "type": description.get("type") or "",
+            "icon_url": description.get("icon_url") or "",
+            "icon_url_large": description.get("icon_url_large") or "",
+            "tradable": description.get("tradable"),
+            "marketable": description.get("marketable"),
+            "commodity": description.get("commodity"),
+            "name_color": description.get("name_color") or "",
+            "background_color": description.get("background_color") or "",
+            "tags": description.get("tags", []),
+            "descriptions": description.get("descriptions", []),
+            "owner_descriptions": description.get("owner_descriptions", []),
+            "actions": description.get("actions", []),
+            "market_actions": description.get("market_actions", []),
+            "owner_actions": description.get("owner_actions", []),
+            "fraudwarnings": description.get("fraudwarnings", []),
+            "raw": description,
+        }
+
+    def _attach_descriptions(self, payload: dict) -> dict:
+        descriptions = {}
+        normalized_descriptions = {}
+        for description in payload.get("descriptions", []):
+            class_id = str(description.get("classid", ""))
+            instance_id = str(description.get("instanceid", "0"))
+            descriptions[(class_id, instance_id)] = description
+            normalized_descriptions[(class_id, instance_id)] = self._normalize_description(description)
+
+        items = []
+        for asset in payload.get("assets", []):
+            class_id = str(asset.get("classid", ""))
+            instance_id = str(asset.get("instanceid", "0"))
+            item = dict(asset)
+            item["description"] = descriptions.get((class_id, instance_id))
+            item["normalized_description"] = normalized_descriptions.get((class_id, instance_id))
+            items.append(item)
+        return {
+            "items": items,
+            "normalized_descriptions": list(normalized_descriptions.values()),
+        }
+
     def _community_cookies(self) -> Optional[Dict[str, str]]:
         credentials = self.transport.community_credentials
         if credentials is None:
@@ -80,19 +131,7 @@ class InventoryService:
             count=count,
             start_asset_id=start_asset_id,
         )
-        descriptions = {}
-        for description in payload.get("descriptions", []):
-            class_id = str(description.get("classid", ""))
-            instance_id = str(description.get("instanceid", "0"))
-            descriptions[(class_id, instance_id)] = description
-
-        items = []
-        for asset in payload.get("assets", []):
-            class_id = str(asset.get("classid", ""))
-            instance_id = str(asset.get("instanceid", "0"))
-            item = dict(asset)
-            item["description"] = descriptions.get((class_id, instance_id))
-            items.append(item)
+        attached = self._attach_descriptions(payload)
 
         return {
             "steamid": payload.get("steamid"),
@@ -101,9 +140,10 @@ class InventoryService:
             "total_inventory_count": payload.get("total_inventory_count"),
             "more_items": payload.get("more_items", False),
             "last_assetid": payload.get("last_assetid"),
-            "items": items,
+            "items": attached["items"],
             "assets": payload.get("assets", []),
             "descriptions": payload.get("descriptions", []),
+            "normalized_descriptions": attached["normalized_descriptions"],
             "raw": payload,
         }
 
@@ -197,19 +237,7 @@ class InventoryService:
             start_asset_id=start_asset_id,
             max_pages=max_pages,
         )
-        descriptions = {}
-        for description in payload.get("descriptions", []):
-            class_id = str(description.get("classid", ""))
-            instance_id = str(description.get("instanceid", "0"))
-            descriptions[(class_id, instance_id)] = description
-
-        items = []
-        for asset in payload.get("assets", []):
-            class_id = str(asset.get("classid", ""))
-            instance_id = str(asset.get("instanceid", "0"))
-            item = dict(asset)
-            item["description"] = descriptions.get((class_id, instance_id))
-            items.append(item)
+        attached = self._attach_descriptions(payload)
 
         return {
             "steamid": payload.get("steamid"),
@@ -219,9 +247,119 @@ class InventoryService:
             "more_items": payload.get("more_items", False),
             "last_assetid": payload.get("last_assetid"),
             "pages_fetched": payload.get("pages_fetched", 0),
-            "items": items,
+            "items": attached["items"],
             "assets": payload.get("assets", []),
             "descriptions": payload.get("descriptions", []),
+            "normalized_descriptions": attached["normalized_descriptions"],
             "pages": payload.get("pages", []),
             "raw": payload.get("raw"),
+        }
+
+    @staticmethod
+    def _normalize_inventory_item(item: dict) -> dict:
+        description = item.get("normalized_description")
+        if description is None:
+            description = InventoryService._normalize_description(item.get("description"))
+        return {
+            "asset_id": item.get("assetid") or item.get("asset_id"),
+            "class_id": item.get("classid"),
+            "instance_id": item.get("instanceid"),
+            "amount": item.get("amount"),
+            "app_id": item.get("appid") or (description or {}).get("app_id"),
+            "context_id": item.get("contextid"),
+            "name": (description or {}).get("name", ""),
+            "market_name": (description or {}).get("market_name", ""),
+            "market_hash_name": (description or {}).get("market_hash_name", ""),
+            "type": (description or {}).get("type", ""),
+            "tradable": (description or {}).get("tradable"),
+            "marketable": (description or {}).get("marketable"),
+            "commodity": (description or {}).get("commodity"),
+            "icon_url": (description or {}).get("icon_url", ""),
+            "name_color": (description or {}).get("name_color", ""),
+            "description": description,
+            "raw": item,
+        }
+
+    def get_inventory_items_summary(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        payload = self.get_inventory_items(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+        items = [self._normalize_inventory_item(item) for item in payload.get("items", [])]
+        items_by_asset_id = {
+            str(item["asset_id"]): item
+            for item in items
+            if item.get("asset_id") is not None
+        }
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "total_inventory_count": payload.get("total_inventory_count"),
+            "more_items": payload.get("more_items", False),
+            "last_assetid": payload.get("last_assetid"),
+            "items": items,
+            "items_by_asset_id": items_by_asset_id,
+            "raw": payload,
+        }
+
+    def find_inventory_items(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+    ) -> dict:
+        payload = self.get_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+        query = (name_query or "").strip().lower()
+        exact_hash = (market_hash_name or "").strip().lower()
+        matches = []
+        for item in payload.get("items", []):
+            if query:
+                haystack = " ".join(
+                    part for part in [item.get("name"), item.get("market_name"), item.get("market_hash_name")] if part
+                ).lower()
+                if query not in haystack:
+                    continue
+            if exact_hash and (item.get("market_hash_name") or "").lower() != exact_hash:
+                continue
+            if tradable is not None and bool(item.get("tradable")) is not bool(tradable):
+                continue
+            if marketable is not None and bool(item.get("marketable")) is not bool(marketable):
+                continue
+            matches.append(item)
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "count": len(matches),
+            "items": matches,
+            "raw": payload,
         }

@@ -315,6 +315,54 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def get_inventory_items_summary_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_inventory_items_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
+    def find_inventory_items_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.find_inventory_items(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            name_query=name_query,
+            market_hash_name=market_hash_name,
+            tradable=tradable,
+            marketable=marketable,
+        )
+
     def search_market_items(
         self,
         *,
@@ -441,6 +489,9 @@ class SteamClient:
 
     def get_community_profile_bundle(self, steam_id=None) -> dict:
         return self.community.get_profile_bundle(steam_id)
+
+    def get_web_api_key_page_state(self) -> dict:
+        return self.community.get_web_api_key_page_state()
 
     def login_to_community(
         self,

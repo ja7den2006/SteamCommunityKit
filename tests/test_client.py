@@ -1347,6 +1347,64 @@ def test_inventory_service_combines_assets_with_descriptions() -> None:
     assert result["total_inventory_count"] == 1
     assert result["items"][0]["assetid"] == "1"
     assert result["items"][0]["description"]["market_hash_name"] == "Example Item"
+    assert result["items"][0]["normalized_description"]["market_hash_name"] == "Example Item"
+    client.close()
+
+
+def test_inventory_items_summary_normalizes_items_and_maps_asset_ids() -> None:
+    payload = {
+        "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"}],
+        "descriptions": [
+            {
+                "classid": "10",
+                "instanceid": "0",
+                "market_hash_name": "Example Item",
+                "name": "Example Item",
+                "tradable": 1,
+                "marketable": 1,
+                "type": "Rifle",
+            }
+        ],
+        "total_inventory_count": 1,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_inventory_items_summary("76561197960435530", 730, 2)
+
+    assert result["items"][0]["asset_id"] == "1"
+    assert result["items"][0]["market_hash_name"] == "Example Item"
+    assert result["items_by_asset_id"]["1"]["type"] == "Rifle"
+    client.close()
+
+
+def test_inventory_find_items_filters_by_name_and_flags() -> None:
+    payload = {
+        "assets": [
+            {"assetid": "1", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"},
+            {"assetid": "2", "classid": "11", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"},
+        ],
+        "descriptions": [
+            {"classid": "10", "instanceid": "0", "market_hash_name": "AK-47 | Example", "name": "AK-47 | Example", "tradable": 1, "marketable": 1},
+            {"classid": "11", "instanceid": "0", "market_hash_name": "M4A4 | Example", "name": "M4A4 | Example", "tradable": 0, "marketable": 1},
+        ],
+        "total_inventory_count": 2,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    result = client.find_inventory_items_for_user(
+        "76561197960435530",
+        730,
+        2,
+        name_query="AK-47",
+        tradable=True,
+    )
+
+    assert result["count"] == 1
+    assert result["items"][0]["market_hash_name"] == "AK-47 | Example"
     client.close()
 
 
@@ -2197,6 +2255,36 @@ def test_community_get_web_api_key_status_parses_access_denied_reason() -> None:
     assert status["api_key"] is None
     assert status["domain"] is None
     assert "have games in your Steam account" in status["reason"]
+    client.close()
+
+
+def test_community_get_web_api_key_page_state_parses_registration_state() -> None:
+    html = """
+    <div id="mainContents"><h2>Access Denied</h2></div>
+    <div id="bodyContents_lo">
+        <p>You will be granted access to Steam Web API keys when you have games in your Steam account.</p>
+    </div>
+    <h2>Register for a new Steam Web API Key</h2>
+    <form><input name="domain" value=""></form>
+    <a>Steam Web API Terms of Use</a>
+    """
+    session = SequenceSession([DummyResponse(text=html), DummyResponse(text=html)])
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    state = client.get_web_api_key_page_state()
+
+    assert state["has_access"] is False
+    assert state["registration_form_visible"] is True
+    assert state["revoke_available"] is False
+    assert state["terms_required"] is True
+    assert "have games in your Steam account" in state["reason"]
     client.close()
 
 

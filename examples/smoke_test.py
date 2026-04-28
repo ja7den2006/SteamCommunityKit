@@ -523,6 +523,10 @@ def run_community_suite(client: SteamClient, args) -> None:
         lambda: _capture_result(cache, "web_api_key_status", client.community.get_web_api_key_status, str),
     )
     run_check(
+        "Get Web API Key Page State",
+        lambda: _format_web_api_key_page_state(client.get_web_api_key_page_state()),
+    )
+    run_check(
         "Fetch Group ID64",
         lambda: str(client.groups.fetch_group_id64(args.group_url)),
     )
@@ -563,6 +567,29 @@ def run_community_suite(client: SteamClient, args) -> None:
                 args.inventory_context_id,
                 count=args.inventory_count,
                 max_pages=2,
+            )
+        ),
+    )
+    run_check(
+        "Get Own Inventory Summary",
+        lambda: _format_inventory_summary(
+            client.get_inventory_items_summary_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+            )
+        ),
+    )
+    run_check(
+        "Find Own Inventory Items",
+        lambda: _format_inventory_find(
+            client.find_inventory_items_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+                tradable=True,
             )
         ),
     )
@@ -758,6 +785,24 @@ def _format_inventory_items(payload: dict) -> str:
     )
 
 
+def _format_inventory_summary(payload: dict) -> str:
+    items = payload.get("items", [])
+    first_name = items[0].get("market_hash_name") or items[0].get("name") if items else "<none>"
+    first_name = _safe_console_text(first_name)
+    return "items={0} total_inventory_count={1} first={2}".format(
+        len(items),
+        payload.get("total_inventory_count"),
+        first_name,
+    )
+
+
+def _format_inventory_find(payload: dict) -> str:
+    items = payload.get("items", [])
+    first_name = items[0].get("market_hash_name") or items[0].get("name") if items else "<none>"
+    first_name = _safe_console_text(first_name)
+    return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
 def _capture_workshop_query_summary(cache: dict, payload: dict) -> str:
     cache["query_published_files"] = payload
     return "total={0} items={1}".format(
@@ -802,6 +847,15 @@ def _format_player_achievement_summary(payload: dict) -> str:
         payload.get("achieved_count"),
         payload.get("achievement_count"),
         payload.get("completion_percentage"),
+    )
+
+
+def _format_web_api_key_page_state(payload: dict) -> str:
+    return "has_access={0} registration_form_visible={1} revoke_available={2} reason={3}".format(
+        payload.get("has_access"),
+        payload.get("registration_form_visible"),
+        payload.get("revoke_available"),
+        _safe_console_text(payload.get("reason", "")),
     )
 
 

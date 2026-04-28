@@ -181,6 +181,34 @@ class CommunityService:
             "reason": "",
         }
 
+    def get_web_api_key_page_state(self) -> dict:
+        html_text = self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/dev/apikey",
+            cookies=self._community_cookies(),
+            expected="text",
+        )
+        status = self.get_web_api_key_status()
+        registration_form_visible = (
+            'Register for a new Steam Web API Key' in html_text
+            or 'Register Steam Web API Key' in html_text
+            or 'name="domain"' in html_text
+        )
+        revoke_available = "Revoke My Steam Web API Key" in html_text or "Revoke my Steam Web API Key" in html_text
+        terms_required = "Steam Web API Terms of Use" in html_text
+        confirmation_hint = "Steam Guard confirmation" in html_text or "confirmation" in html_text.lower()
+        return {
+            "has_access": status.get("has_access", False),
+            "api_key": status.get("api_key"),
+            "domain": status.get("domain"),
+            "reason": status.get("reason", ""),
+            "registration_form_visible": registration_form_visible,
+            "revoke_available": revoke_available,
+            "terms_required": terms_required,
+            "confirmation_hint": confirmation_hint,
+            "raw_html": html_text,
+        }
+
     def set_profile_privacy(
         self,
         steam_id=None,
