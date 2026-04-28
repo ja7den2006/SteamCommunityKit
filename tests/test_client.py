@@ -97,6 +97,7 @@ def test_client_exposes_expected_services() -> None:
     assert client.webapi_util is not None
     assert client.workshop is not None
     assert client.broadcast is not None
+    assert client.cheat_reporting is not None
     assert client.community_api is not None
     assert client.cloud is not None
     assert client.econ is not None
@@ -273,6 +274,87 @@ def test_broadcast_service_uses_input_json_on_api_base_url() -> None:
     assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
     assert '"broadcast_id":"123456"' in call["params"]["input_json"]
     assert '"frame_data":"{\\"score\\":42}"' in call["params"]["input_json"]
+    client.close()
+
+
+def test_cheat_reporting_report_player_cheating_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"reportid": "123"}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cheat_reporting.report_player_cheating(
+        "76561197972495328",
+        570,
+        reporter_steam_id="76561197960435530",
+        app_data="7",
+        heuristic=True,
+        detection=False,
+        player_report=True,
+        no_report_id=False,
+        game_mode=0,
+        suspicion_start_time=0,
+        severity=5,
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/ReportPlayerCheating/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"steamid":"76561197972495328"' in call["params"]["input_json"]
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"steamidreporter":"76561197960435530"' in call["params"]["input_json"]
+    assert '"appdata":"7"' in call["params"]["input_json"]
+    assert '"heuristic":true' in call["params"]["input_json"]
+    assert '"detection":false' in call["params"]["input_json"]
+    assert '"playerreport":true' in call["params"]["input_json"]
+    assert '"noreportid":false' in call["params"]["input_json"]
+    assert '"gamemode":0' in call["params"]["input_json"]
+    assert '"suspicionstarttime":0' in call["params"]["input_json"]
+    assert '"severity":5' in call["params"]["input_json"]
+    client.close()
+
+
+def test_cheat_reporting_get_cheating_reports_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"reports": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cheat_reporting.get_cheating_reports(
+        570,
+        0,
+        0,
+        "0",
+        include_reports=True,
+        include_bans=False,
+        steam_id="76561197972495328",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/GetCheatingReports/v1/"
+    assert call["params"]["appid"] == 570
+    assert call["params"]["timeend"] == 0
+    assert call["params"]["timebegin"] == 0
+    assert call["params"]["reportidmin"] == "0"
+    assert call["params"]["includereports"] == 1
+    assert call["params"]["includebans"] == 0
+    assert call["params"]["steamid"] == "76561197972495328"
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_cheat_reporting_request_vac_status_uses_service_payload() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.cheat_reporting.request_vac_status_for_user(
+        "76561197972495328",
+        570,
+        session_id="123456",
+    )
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/RequestVacStatusForUser/v1/"
+    assert call["params"]["key"] == "test"
+    assert '"steamid":"76561197972495328"' in call["params"]["input_json"]
+    assert '"appid":570' in call["params"]["input_json"]
+    assert '"session_id":"123456"' in call["params"]["input_json"]
     client.close()
 
 

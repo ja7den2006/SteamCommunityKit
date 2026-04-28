@@ -53,6 +53,7 @@ def test_normalize_app_ids_handles_single_and_list_values() -> None:
 def test_validate_uint64_and_normalize_uint64_ids() -> None:
     assert validate_uint64("123456789", "published_file_id") == "123456789"
     assert normalize_uint64_ids([123, "456"], "published_file_id") == ["123", "456"]
+    assert validate_uint64("0", "report_id_min", allow_zero=True) == "0"
 
 
 def test_validate_uint32_and_normalize_binary_value() -> None:

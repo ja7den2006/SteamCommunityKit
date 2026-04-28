@@ -62,12 +62,18 @@ def validate_int32(value: Union[str, int], field_name: str) -> int:
     return normalized
 
 
-def validate_uint64(value: Union[str, int], field_name: str) -> str:
+def validate_uint64(
+    value: Union[str, int],
+    field_name: str,
+    *,
+    allow_zero: bool = False,
+) -> str:
     normalized = str(value).strip()
     if not normalized.isdigit():
         raise SteamValidationError(f"{field_name} must be a numeric string or integer.")
-    if int(normalized) <= 0:
-        raise SteamValidationError(f"{field_name} must be greater than zero.")
+    if int(normalized) < 0 or (int(normalized) == 0 and not allow_zero):
+        comparator = "greater than or equal to zero" if allow_zero else "greater than zero"
+        raise SteamValidationError(f"{field_name} must be {comparator}.")
     return normalized
 
 
