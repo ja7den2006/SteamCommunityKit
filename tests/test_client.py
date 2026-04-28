@@ -575,6 +575,85 @@ def test_community_get_profile_privacy_parses_embedded_json() -> None:
     client.close()
 
 
+def test_community_get_trade_offer_url_parses_partner_and_token() -> None:
+    html = """
+    <input size="45" type="text" class="trade_offer_access_url" id="trade_offer_access_url"
+           value="https://steamcommunity.com/tradeoffer/new/?partner=1189313876&amp;token=vrJtfrV_" readonly>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    trade_url = client.community.get_trade_offer_url()
+
+    assert trade_url["trade_url"] == "https://steamcommunity.com/tradeoffer/new/?partner=1189313876&token=vrJtfrV_"
+    assert trade_url["partner_id"] == "1189313876"
+    assert trade_url["token"] == "vrJtfrV_"
+    client.close()
+
+
+def test_community_rotate_trade_offer_url_posts_expected_request() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(text="newtoken123"),
+            DummyResponse(
+                text='<div id="profile_edit_config" data-userinfo="{&quot;accountid&quot;:1189313876}"></div>'
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    rotated = client.community.rotate_trade_offer_url()
+
+    first_call = session.calls[0]
+    assert first_call["url"] == "https://steamcommunity.com/profiles/76561197960435530/tradeoffers/newtradeurl"
+    assert first_call["data"]["sessionid"] == "session123"
+    assert first_call["headers"]["Referer"] == "https://steamcommunity.com/profiles/76561197960435530/tradeoffers/privacy"
+    assert rotated["partner_id"] == "1189313876"
+    assert rotated["token"] == "newtoken123"
+    assert rotated["trade_url"] == "https://steamcommunity.com/tradeoffer/new/?partner=1189313876&token=newtoken123"
+    client.close()
+
+
+def test_community_get_web_api_key_status_parses_access_denied_reason() -> None:
+    html = """
+    <div id="mainContents"><h2>Access Denied</h2></div>
+    <div id="bodyContents_lo">
+        <p>You will be granted access to Steam Web API keys when you have games in your Steam account.</p>
+    </div>
+    """
+    session = RecordingSession(DummyResponse(text=html))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    status = client.community.get_web_api_key_status()
+
+    assert status["has_access"] is False
+    assert status["api_key"] is None
+    assert status["domain"] is None
+    assert "have games in your Steam account" in status["reason"]
+    client.close()
+
+
 def test_community_edit_profile_requires_at_least_one_field() -> None:
     client = SteamClient(api_key="test")
     client.set_community_credentials(

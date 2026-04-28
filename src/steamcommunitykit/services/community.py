@@ -6,6 +6,7 @@ import mimetypes
 import re
 from pathlib import Path
 from typing import Dict, Optional, Union
+from urllib.parse import parse_qs, urlparse
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
 from steamcommunitykit.exceptions import SteamResponseError, SteamValidationError
@@ -62,6 +63,15 @@ class CommunityService:
             expected="text",
         )
 
+    def _fetch_trade_privacy_page_html(self, steam_id=None) -> str:
+        normalized_steam_id = self._resolved_steam_id(steam_id)
+        return self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/tradeoffers/privacy",
+            cookies=self._community_cookies(),
+            expected="text",
+        )
+
     def get_account_info(self, steam_id=None) -> dict:
         return self._extract_json_data_attribute(
             self._fetch_edit_page_html(steam_id),
@@ -80,6 +90,90 @@ class CommunityService:
         if not isinstance(privacy, dict):
             raise SteamResponseError("Steam did not include profile privacy data on the edit page.")
         return privacy
+
+    def get_trade_offer_url(self, steam_id=None) -> dict:
+        html_text = self._fetch_trade_privacy_page_html(steam_id)
+        match = re.search(
+            r'id="trade_offer_access_url"[^>]*value="([^"]+)"',
+            html_text,
+        )
+        if not match:
+            raise SteamResponseError("Steam did not expose a trade offer URL on the privacy page.")
+        trade_url = html.unescape(match.group(1))
+        parsed = urlparse(trade_url)
+        query = parse_qs(parsed.query)
+        partner_id = query.get("partner", [None])[0]
+        token = query.get("token", [None])[0]
+        if not partner_id or not token:
+            raise SteamResponseError("Steam returned a malformed trade offer URL.")
+        return {
+            "trade_url": trade_url,
+            "partner_id": partner_id,
+            "token": token,
+        }
+
+    def rotate_trade_offer_url(self, steam_id=None) -> dict:
+        credentials = self.transport.require_community_credentials()
+        normalized_steam_id = self._resolved_steam_id(steam_id)
+        token = ensure_not_blank(
+            self.transport.request(
+                "POST",
+                f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/tradeoffers/newtradeurl",
+                data={"sessionid": credentials.session_id},
+                headers=self._headers(
+                    f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/tradeoffers/privacy"
+                ),
+                cookies=self._community_cookies(),
+                expected="text",
+            ),
+            "token",
+        )
+        token = token.strip().strip('"')
+        account_info = self.get_account_info(normalized_steam_id)
+        partner_id = str(account_info["accountid"])
+        return {
+            "trade_url": (
+                "https://steamcommunity.com/tradeoffer/new/?partner={0}&token={1}".format(
+                    partner_id,
+                    token,
+                )
+            ),
+            "partner_id": partner_id,
+            "token": token,
+        }
+
+    def get_web_api_key_status(self) -> dict:
+        html_text = self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/dev/apikey",
+            cookies=self._community_cookies(),
+            expected="text",
+        )
+        if "<h2>Access Denied</h2>" in html_text:
+            reason_match = re.search(r"<div id=\"bodyContents_lo\">\s*<p>(.*?)</p>", html_text, re.S | re.I)
+            reason = ""
+            if reason_match:
+                reason = re.sub(r"<.*?>", "", reason_match.group(1)).strip()
+                reason = html.unescape(reason)
+            return {
+                "has_access": False,
+                "api_key": None,
+                "domain": None,
+                "reason": reason,
+            }
+
+        key_match = re.search(r"Key:\s*([A-F0-9]{32})", html_text, re.I)
+        domain_match = re.search(
+            r'name="domain"[^>]*value="([^"]*)"',
+            html_text,
+            re.I,
+        )
+        return {
+            "has_access": True,
+            "api_key": key_match.group(1) if key_match else None,
+            "domain": html.unescape(domain_match.group(1)).strip() if domain_match else None,
+            "reason": "",
+        }
 
     def set_profile_privacy(
         self,
