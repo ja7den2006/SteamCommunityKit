@@ -149,6 +149,25 @@ class SteamClient:
             **kwargs,
         )
 
+    def get_app_details(self, app_id, *, language: str = "english", country: str = "US", filters: str = "") -> dict:
+        return self.apps.get_app_details(
+            app_id,
+            language=language,
+            country=country,
+            filters=filters,
+        )
+
+    def search_store_apps(self, query: str, *, max_results: int = 25, case_sensitive: bool = False, **kwargs) -> dict:
+        return self.store.search_apps(
+            query,
+            max_results=max_results,
+            case_sensitive=case_sensitive,
+            **kwargs,
+        )
+
+    def get_news_summary(self, app_id, **kwargs) -> dict:
+        return self.news.get_news_summary(app_id, **kwargs)
+
     def get_inventory_for_user(
         self,
         identifier,

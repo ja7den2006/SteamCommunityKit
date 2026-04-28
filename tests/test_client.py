@@ -416,6 +416,56 @@ def test_apps_service_uses_public_servers_at_address_endpoint() -> None:
     client.close()
 
 
+def test_apps_get_app_list_raises_clear_error() -> None:
+    client = SteamClient()
+
+    with pytest.raises(SteamResponseError, match="no longer exposes a working public ISteamApps/GetAppList"):
+        client.apps.get_app_list()
+
+    client.close()
+
+
+def test_apps_get_app_details_uses_store_appdetails_endpoint() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "570": {
+                    "success": True,
+                    "data": {
+                        "steam_appid": 570,
+                        "name": "Dota 2",
+                        "type": "game",
+                        "is_free": True,
+                        "required_age": 0,
+                        "developers": ["Valve"],
+                        "publishers": ["Valve"],
+                        "genres": [{"description": "Action"}],
+                        "categories": [{"description": "Multi-player"}],
+                        "short_description": "Example",
+                        "header_image": "header.jpg",
+                        "website": "https://www.dota2.com",
+                        "screenshots": [{"path_full": "shot1.jpg"}],
+                        "movies": [{"mp4": {"max": "movie1.mp4"}}],
+                        "release_date": {"date": "Jul 9, 2013", "coming_soon": False},
+                        "supported_languages": "English",
+                    },
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.apps.get_app_details(570)
+
+    call = session.calls[0]
+    assert call["url"].startswith("https://store.steampowered.com/api/appdetails?")
+    assert result["app_id"] == 570
+    assert result["name"] == "Dota 2"
+    assert result["genres"] == ["Action"]
+    assert result["movies"] == ["movie1.mp4"]
+    client.close()
+
+
 def test_news_service_authed_method_uses_public_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"appnews": {}}))
     client = SteamClient(api_key="test", session=session)
@@ -430,6 +480,39 @@ def test_news_service_authed_method_uses_public_api_base_url() -> None:
     client.close()
 
 
+def test_news_service_summary_normalizes_news_items() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "appnews": {
+                    "appid": 570,
+                    "newsitems": [
+                        {
+                            "gid": "1",
+                            "title": "Patch Notes",
+                            "url": "https://example.com",
+                            "author": "Valve",
+                            "contents": "<p>Hello <b>world</b></p>",
+                            "feedlabel": "Community Announcements",
+                            "date": 1234567890,
+                            "is_external_url": False,
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.news.get_news_summary(570)
+
+    assert result["app_id"] == 570
+    assert result["count"] == 1
+    assert result["items"][0]["contents"] == "Hello world"
+    assert result["items"][0]["feed"] == "Community Announcements"
+    client.close()
+
+
 def test_store_service_uses_public_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"items": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -441,6 +524,50 @@ def test_store_service_uses_public_api_base_url() -> None:
     assert call["params"]["if_modified_since"] == 1234567890
     assert call["params"]["include_games"] == 1
     assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_store_service_get_app_list_summary_normalizes_entries() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "apps": [
+                        {"appid": 10, "name": "Counter-Strike", "last_modified": 1, "price_change_number": 2}
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.store.get_app_list_summary(include_games=True)
+
+    assert result["apps"][0]["app_id"] == 10
+    assert result["apps"][0]["name"] == "Counter-Strike"
+    client.close()
+
+
+def test_store_service_search_apps_filters_results() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "apps": [
+                        {"appid": 10, "name": "Counter-Strike"},
+                        {"appid": 570, "name": "Dota 2"},
+                        {"appid": 730, "name": "Counter-Strike 2"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.store.search_apps("counter", max_results=5)
+
+    assert result["count"] == 2
+    assert [item["app_id"] for item in result["matches"]] == [10, 730]
     client.close()
 
 

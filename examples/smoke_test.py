@@ -24,6 +24,7 @@ DEFAULT_GROUP_NAME_CHECK = "steamcommunitykit-smoke-check"
 DEFAULT_MARKET_ITEM = "AK-47 | Redline (Field-Tested)"
 DEFAULT_INVENTORY_APP_ID = 753
 DEFAULT_INVENTORY_CONTEXT_ID = 6
+DEFAULT_STORE_SEARCH_QUERY = "Counter-Strike"
 
 
 def print_header(title: str) -> None:
@@ -141,10 +142,18 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: str(client.apps.up_to_date_check(args.app_id, 0).get("up_to_date")),
     )
     run_check(
+        "Get App Details",
+        lambda: _format_app_details(client.get_app_details(args.app_id)),
+    )
+    run_check(
         "Get News For App",
         lambda: "newsitems={0}".format(
             len(client.news.get_news_for_app(args.app_id, count=1).get("appnews", {}).get("newsitems", []))
         ),
+    )
+    run_check(
+        "Get News Summary",
+        lambda: _format_news_summary(client.get_news_summary(args.app_id, count=2)),
     )
     run_check(
         "Get Number Of Current Players",
@@ -216,6 +225,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         "Get Store App List",
         lambda: "apps={0}".format(
             len(client.store.get_app_list(include_games=True).get("apps", []))
+        ),
+    )
+    run_check(
+        "Search Store Apps",
+        lambda: _format_store_app_search(
+            client.search_store_apps(args.store_search_query, max_results=3, include_games=True)
         ),
     )
     run_check(
@@ -566,6 +581,26 @@ def _format_trade_history(payload: dict) -> str:
     )
 
 
+def _format_app_details(payload: dict) -> str:
+    return "name={0} type={1} free={2}".format(
+        payload.get("name", ""),
+        payload.get("type", ""),
+        payload.get("is_free"),
+    )
+
+
+def _format_news_summary(payload: dict) -> str:
+    items = payload.get("items", [])
+    first_title = items[0]["title"] if items else "<none>"
+    return "items={0} first={1}".format(len(items), first_title)
+
+
+def _format_store_app_search(payload: dict) -> str:
+    matches = payload.get("matches", [])
+    first_name = matches[0]["name"] if matches else "<none>"
+    return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
 def _format_market_orders_summary(payload: dict) -> str:
     return "buy_rows={0} sell_rows={1} buy_summary={2}".format(
         len(payload.get("buy_orders", [])),
@@ -737,6 +772,11 @@ def parse_args() -> argparse.Namespace:
         "--market-query",
         default="AK-47",
         help="Query string used for market search tests.",
+    )
+    parser.add_argument(
+        "--store-search-query",
+        default=DEFAULT_STORE_SEARCH_QUERY,
+        help="Query string used for keyed store app list search tests.",
     )
     parser.add_argument(
         "--inventory-app-id",

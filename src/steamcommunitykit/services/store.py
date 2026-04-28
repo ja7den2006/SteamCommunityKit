@@ -4,6 +4,7 @@ from typing import Optional
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
+from steamcommunitykit.utils import ensure_not_blank
 
 
 class StoreService:
@@ -43,3 +44,46 @@ class StoreService:
             params=params,
             require_api_key=True,
         )
+
+    @staticmethod
+    def _normalize_app_entry(app: dict) -> dict:
+        return {
+            "app_id": app.get("appid"),
+            "name": app.get("name") or "",
+            "last_modified": app.get("last_modified"),
+            "price_change_number": app.get("price_change_number"),
+            "raw": app,
+        }
+
+    def get_app_list_summary(self, **kwargs) -> dict:
+        payload = self.get_app_list(**kwargs)
+        apps = payload.get("apps", [])
+        return {
+            "apps": [self._normalize_app_entry(app) for app in apps],
+            "raw": payload,
+        }
+
+    def search_apps(
+        self,
+        query: str,
+        *,
+        max_results: int = 25,
+        case_sensitive: bool = False,
+        **kwargs,
+    ) -> dict:
+        normalized_query = ensure_not_blank(query, "query")
+        comparison_query = normalized_query if case_sensitive else normalized_query.lower()
+        entries = self.get_app_list_summary(**kwargs).get("apps", [])
+        matches = []
+        for app in entries:
+            name = app.get("name", "")
+            haystack = name if case_sensitive else name.lower()
+            if comparison_query in haystack:
+                matches.append(app)
+            if len(matches) >= int(max_results):
+                break
+        return {
+            "query": normalized_query,
+            "matches": matches,
+            "count": len(matches),
+        }
