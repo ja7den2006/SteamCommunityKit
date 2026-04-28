@@ -335,6 +335,12 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Search Summary",
+        lambda: _format_market_search_summary(
+            client.search_market_items(query=args.market_query, app_id=args.market_app_id, count=5)
+        ),
+    )
+    run_check(
         "Market Item Name ID",
         lambda: str(client.market.get_item_name_id(args.market_app_id, args.market_hash_name)),
     )
@@ -534,6 +540,16 @@ def _format_market_orders_summary(payload: dict) -> str:
         len(payload.get("buy_orders", [])),
         len(payload.get("sell_orders", [])),
         payload.get("buy_order_summary", ""),
+    )
+
+
+def _format_market_search_summary(payload: dict) -> str:
+    items = payload.get("items", [])
+    first_hash_name = items[0]["hash_name"] if items else "<none>"
+    return "items={0} total={1} first={2}".format(
+        len(items),
+        payload.get("total_count"),
+        first_hash_name,
     )
 
 

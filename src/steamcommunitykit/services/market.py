@@ -59,6 +59,135 @@ class MarketService:
             params=params,
         )
 
+    @staticmethod
+    def _normalize_search_item(item: dict) -> dict:
+        asset_description = item.get("asset_description") or {}
+        app_id = asset_description.get("appid")
+        market_hash_name = asset_description.get("market_hash_name") or item.get("hash_name") or ""
+        return {
+            "name": item.get("name") or asset_description.get("name") or market_hash_name,
+            "hash_name": item.get("hash_name") or market_hash_name,
+            "market_hash_name": market_hash_name,
+            "market_name": asset_description.get("market_name") or item.get("name"),
+            "sell_listings": item.get("sell_listings"),
+            "sell_price": item.get("sell_price"),
+            "sell_price_text": item.get("sell_price_text"),
+            "sale_price_text": item.get("sale_price_text"),
+            "app_name": item.get("app_name"),
+            "app_icon": item.get("app_icon"),
+            "app_id": app_id,
+            "commodity": asset_description.get("commodity"),
+            "tradable": asset_description.get("tradable"),
+            "type": asset_description.get("type"),
+            "name_color": asset_description.get("name_color"),
+            "icon_url": asset_description.get("icon_url"),
+            "background_color": asset_description.get("background_color"),
+            "market_url": (
+                "{0}/market/listings/{1}/{2}".format(
+                    COMMUNITY_BASE_URL,
+                    app_id,
+                    quote(market_hash_name, safe=""),
+                )
+                if app_id and market_hash_name
+                else None
+            ),
+            "asset_description": asset_description,
+            "raw": item,
+        }
+
+    def search_items_summary(
+        self,
+        *,
+        query: str = "",
+        app_id=None,
+        start: int = 0,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+    ) -> dict:
+        payload = self.search_items(
+            query=query,
+            app_id=app_id,
+            start=start,
+            count=count,
+            search_descriptions=search_descriptions,
+            sort_column=sort_column,
+            sort_dir=sort_dir,
+        )
+        results = payload.get("results", [])
+        return {
+            "success": payload.get("success"),
+            "start": payload.get("start", start),
+            "pagesize": payload.get("pagesize", len(results)),
+            "total_count": payload.get("total_count", len(results)),
+            "searchdata": payload.get("searchdata", {}),
+            "items": [self._normalize_search_item(item) for item in results],
+            "raw": payload,
+        }
+
+    def search_all_items(
+        self,
+        *,
+        query: str = "",
+        app_id=None,
+        start: int = 0,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+        max_pages=None,
+        max_results=None,
+    ) -> dict:
+        current_start = validate_uint32(start, "start", allow_zero=True)
+        page_limit = None if max_pages is None else validate_uint32(max_pages, "max_pages")
+        result_limit = None if max_results is None else validate_uint32(max_results, "max_results")
+        page_count = 0
+        pages = []
+        items = []
+        total_count = None
+
+        while True:
+            page = self.search_items_summary(
+                query=query,
+                app_id=app_id,
+                start=current_start,
+                count=count,
+                search_descriptions=search_descriptions,
+                sort_column=sort_column,
+                sort_dir=sort_dir,
+            )
+            pages.append(page)
+            page_count += 1
+            total_count = page.get("total_count", total_count)
+
+            page_items = page.get("items", [])
+            items.extend(page_items)
+
+            if result_limit is not None and len(items) >= result_limit:
+                items = items[:result_limit]
+                break
+            if page_limit is not None and page_count >= page_limit:
+                break
+
+            page_size = page.get("pagesize", len(page_items)) or len(page_items)
+            if page_size <= 0 or not page_items:
+                break
+
+            current_start += page_size
+            if total_count is not None and current_start >= int(total_count):
+                break
+
+        return {
+            "success": pages[-1].get("success") if pages else True,
+            "start": start,
+            "pages_fetched": page_count,
+            "total_count": total_count if total_count is not None else len(items),
+            "items": items,
+            "pages": pages,
+            "raw": pages[-1].get("raw") if pages else {},
+        }
+
     def get_item_listings(
         self,
         app_id,

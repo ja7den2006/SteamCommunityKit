@@ -935,6 +935,106 @@ def test_market_search_uses_render_endpoint() -> None:
     client.close()
 
 
+def test_market_search_summary_normalizes_items() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": True,
+                "start": 0,
+                "pagesize": 10,
+                "total_count": 123,
+                "results": [
+                    {
+                        "name": "AK-47 | Example",
+                        "hash_name": "AK-47 | Example",
+                        "sell_listings": 5,
+                        "sell_price": 1234,
+                        "sell_price_text": "$12.34",
+                        "sale_price_text": "$11.11",
+                        "app_name": "Counter-Strike 2",
+                        "app_icon": "icon.png",
+                        "asset_description": {
+                            "appid": 730,
+                            "market_hash_name": "AK-47 | Example",
+                            "market_name": "AK-47 | Example",
+                            "commodity": 0,
+                            "tradable": 1,
+                            "type": "Rifle",
+                            "name_color": "D2D2D2",
+                            "icon_url": "asset_icon.png",
+                            "background_color": "",
+                        },
+                    }
+                ],
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.market.search_items_summary(query="AK-47", app_id=730, count=5)
+
+    assert result["total_count"] == 123
+    assert result["items"][0]["hash_name"] == "AK-47 | Example"
+    assert result["items"][0]["market_url"] == "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Example"
+    assert result["items"][0]["sell_price_text"] == "$12.34"
+    client.close()
+
+
+def test_market_search_all_items_paginates_results() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "success": True,
+                    "start": 0,
+                    "pagesize": 2,
+                    "total_count": 4,
+                    "results": [
+                        {
+                            "name": "One",
+                            "hash_name": "One",
+                            "asset_description": {"appid": 730, "market_hash_name": "One"},
+                        },
+                        {
+                            "name": "Two",
+                            "hash_name": "Two",
+                            "asset_description": {"appid": 730, "market_hash_name": "Two"},
+                        },
+                    ],
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "success": True,
+                    "start": 2,
+                    "pagesize": 2,
+                    "total_count": 4,
+                    "results": [
+                        {
+                            "name": "Three",
+                            "hash_name": "Three",
+                            "asset_description": {"appid": 730, "market_hash_name": "Three"},
+                        },
+                        {
+                            "name": "Four",
+                            "hash_name": "Four",
+                            "asset_description": {"appid": 730, "market_hash_name": "Four"},
+                        },
+                    ],
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.market.search_all_items(query="AK", app_id=730, count=2)
+
+    assert result["pages_fetched"] == 2
+    assert len(result["items"]) == 4
+    assert session.calls[1]["params"]["start"] == 2
+    client.close()
+
+
 def test_market_item_listings_uses_listings_render_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"success": True, "listinginfo": {}}))
     client = SteamClient(session=session)
@@ -1029,6 +1129,32 @@ def test_market_get_price_history_parses_listings_page_html() -> None:
     assert result["price_suffix"] == ""
     assert len(result["prices"]) == 2
     assert result["prices"][0][0] == "Feb 21 2014 01: +0"
+    client.close()
+
+
+def test_client_search_market_items_uses_market_summary_helper() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": True,
+                "start": 0,
+                "pagesize": 10,
+                "total_count": 1,
+                "results": [
+                    {
+                        "name": "AK-47 | Example",
+                        "hash_name": "AK-47 | Example",
+                        "asset_description": {"appid": 730, "market_hash_name": "AK-47 | Example"},
+                    }
+                ],
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.search_market_items(query="AK-47", app_id=730)
+
+    assert result["items"][0]["hash_name"] == "AK-47 | Example"
     client.close()
 
 

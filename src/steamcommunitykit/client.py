@@ -164,6 +164,52 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def search_market_items(
+        self,
+        *,
+        query: str = "",
+        app_id=None,
+        start: int = 0,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+    ) -> dict:
+        return self.market.search_items_summary(
+            query=query,
+            app_id=app_id,
+            start=start,
+            count=count,
+            search_descriptions=search_descriptions,
+            sort_column=sort_column,
+            sort_dir=sort_dir,
+        )
+
+    def search_all_market_items(
+        self,
+        *,
+        query: str = "",
+        app_id=None,
+        start: int = 0,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+        max_pages: Optional[int] = None,
+        max_results: Optional[int] = None,
+    ) -> dict:
+        return self.market.search_all_items(
+            query=query,
+            app_id=app_id,
+            start=start,
+            count=count,
+            search_descriptions=search_descriptions,
+            sort_column=sort_column,
+            sort_dir=sort_dir,
+            max_pages=max_pages,
+            max_results=max_results,
+        )
+
     def get_full_inventory_for_user(
         self,
         identifier,
