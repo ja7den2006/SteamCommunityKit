@@ -102,11 +102,3 @@ class UsersService:
             params={"rowversion": int(rowversion)},
             require_api_key=True,
         )
-
-    def get_publisher_app_ownership(self, steam_id) -> dict:
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/GetPublisherAppOwnership/v4/",
-            params={"steamid": validate_steam_id(steam_id)},
-            require_api_key=True,
-        )

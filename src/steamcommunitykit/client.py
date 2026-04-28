@@ -11,17 +11,10 @@ from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult
 from steamcommunitykit.services import (
     AppsService,
     AuthenticationService,
-    BroadcastService,
-    CheatReportingService,
-    CloudService,
-    EconService,
-    EconMarketService,
-    CommunityAPIService,
     CommunityService,
-    GameNotificationsService,
+    CommunityAPIService,
+    EconService,
     GroupsService,
-    LeaderboardsService,
-    MicroTxnService,
     NewsService,
     PlayersService,
     PublishedFilesService,
@@ -30,10 +23,8 @@ from steamcommunitykit.services import (
     RemoteStorageService,
     StoreService,
     UserStatsService,
-    UserAuthService,
     UsersService,
     WebAPIUtilService,
-    WorkshopService,
 )
 from steamcommunitykit.utils import load_api_key_from_json
 
@@ -63,25 +54,16 @@ class SteamClient:
         self.news = NewsService(self._transport)
         self.user_stats = UserStatsService(self._transport)
         self.auth = AuthenticationService(self._transport)
-        self.broadcast = BroadcastService(self._transport)
-        self.cheat_reporting = CheatReportingService(self._transport)
-        self.cloud = CloudService(self._transport)
         self.econ = EconService(self._transport)
-        self.econ_market = EconMarketService(self._transport)
         self.community_api = CommunityAPIService(self._transport)
         self.community = CommunityService(self._transport)
-        self.game_notifications = GameNotificationsService(self._transport)
         self.groups = GroupsService(self._transport)
-        self.leaderboards = LeaderboardsService(self._transport)
-        self.microtxn = MicroTxnService(self._transport)
         self.store = StoreService(self._transport)
         self.published_files = PublishedFilesService(self._transport)
         self.published_item_search = PublishedItemSearchService(self._transport)
         self.published_item_voting = PublishedItemVotingService(self._transport)
         self.remote_storage = RemoteStorageService(self._transport)
-        self.user_auth = UserAuthService(self._transport)
         self.webapi_util = WebAPIUtilService(self._transport)
-        self.workshop = WorkshopService(self._transport)
 
     @property
     def api_key(self) -> Optional[str]:

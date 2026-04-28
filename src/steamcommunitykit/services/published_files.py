@@ -4,24 +4,13 @@ from typing import Dict, Optional, Sequence
 
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_steam_id, validate_uint64
+from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint64
 
 
 class PublishedFilesService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/IPublishedFileService"
-
-    def delete(self, published_file_id, app_id) -> dict:
-        return self.transport.request(
-            "GET",
-            f"{self.base_url}/Delete/v1/",
-            params={
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-                "appid": validate_app_id(app_id),
-            },
-            require_api_key=True,
-        )
 
     def query_files(
         self,
@@ -125,91 +114,4 @@ class PublishedFilesService:
             params=params,
             require_api_key=True,
             service_payload=service_payload,
-        )
-
-    def set_developer_metadata(self, published_file_id, app_id, metadata: str) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/SetDeveloperMetadata/v1/",
-            require_api_key=True,
-            service_payload={
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-                "appid": validate_app_id(app_id),
-                "metadata": ensure_not_blank(metadata, "metadata"),
-            },
-        )
-
-    def update_app_ugc_ban(
-        self,
-        steam_id,
-        app_id,
-        expiration_time: int,
-        reason: Optional[str] = None,
-    ) -> dict:
-        data = {
-            "steamid": validate_steam_id(steam_id),
-            "appid": validate_app_id(app_id),
-            "expiration_time": int(expiration_time),
-        }
-        if reason:
-            data["reason"] = reason
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/UpdateAppUGCBan/v1/",
-            require_api_key=True,
-            service_payload=data,
-        )
-
-    def update_ban_status(
-        self,
-        published_file_id,
-        app_id,
-        banned: bool,
-        reason: str,
-    ) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/UpdateBanStatus/v1/",
-            require_api_key=True,
-            service_payload={
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-                "appid": validate_app_id(app_id),
-                "banned": int(banned),
-                "reason": ensure_not_blank(reason, "reason"),
-            },
-        )
-
-    def update_incompatible_status(self, published_file_id, app_id, incompatible: bool) -> dict:
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/UpdateIncompatibleStatus/v1/",
-            require_api_key=True,
-            service_payload={
-                "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-                "appid": validate_app_id(app_id),
-                "incompatible": int(incompatible),
-            },
-        )
-
-    def update_tags(
-        self,
-        published_file_id,
-        app_id,
-        *,
-        add_tags: Optional[str] = None,
-        remove_tags: Optional[str] = None,
-    ) -> dict:
-        data = {
-            "publishedfileid": validate_uint64(published_file_id, "published_file_id"),
-            "appid": validate_app_id(app_id),
-        }
-        if add_tags:
-            data["add_tags"] = add_tags
-        if remove_tags:
-            data["remove_tags"] = remove_tags
-        return self.transport.request(
-            "POST",
-            f"{self.base_url}/UpdateTags/v1/",
-            require_api_key=True,
-            service_payload=data,
         )

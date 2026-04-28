@@ -83,94 +83,6 @@ def test_transport_unwraps_response_payload() -> None:
     assert transport.request("GET", "https://example.com", require_api_key=True) == {"players": []}
 
 
-def test_client_exposes_expected_services() -> None:
-    client = SteamClient(api_key="test")
-    assert client.users is not None
-    assert client.players is not None
-    assert client.apps is not None
-    assert client.store is not None
-    assert client.published_files is not None
-    assert client.published_item_search is not None
-    assert client.published_item_voting is not None
-    assert client.remote_storage is not None
-    assert client.user_auth is not None
-    assert client.webapi_util is not None
-    assert client.workshop is not None
-    assert client.broadcast is not None
-    assert client.cheat_reporting is not None
-    assert client.community_api is not None
-    assert client.cloud is not None
-    assert client.econ is not None
-    assert client.econ_market is not None
-    assert client.game_notifications is not None
-    assert client.leaderboards is not None
-    assert client.microtxn is not None
-    client.close()
-
-
-def test_community_credentials_build_cookie_from_access_token() -> None:
-    credentials = CommunityCredentials(
-        steam_id="76561197960435530",
-        session_id="session123",
-        access_token="token123",
-    )
-    assert credentials.steam_login_secure_value == "76561197960435530%7C%7Ctoken123"
-
-
-def test_users_service_publisher_endpoint_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"ownsapp": True}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.users.check_app_ownership("76561197960435530", 440)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamUser/CheckAppOwnership/v4/"
-    assert call["params"]["steamid"] == "76561197960435530"
-    assert call["params"]["appid"] == 440
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_apps_service_partner_list_method_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"applist": {}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.apps.get_partner_app_list_for_web_api_key("game,tool")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetPartnerAppListForWebAPIKey/v2/"
-    assert call["params"]["type_filter"] == "game,tool"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_apps_service_get_app_betas_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"betas": []}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.apps.get_app_betas(570)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetAppBetas/v1/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_news_service_authed_method_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"appnews": {}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.news.get_news_for_app_authed(440, count=1)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamNews/GetNewsForAppAuthed/v2/"
-    assert call["params"]["appid"] == 440
-    assert call["params"]["count"] == 1
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
 def test_transport_retries_rate_limited_response_until_success() -> None:
     session = SequenceSession(
         [
@@ -199,6 +111,59 @@ def test_transport_raises_rate_limit_error_after_exhausting_retries() -> None:
         transport.request("GET", "https://example.com", require_api_key=True)
 
 
+def test_client_exposes_expected_services() -> None:
+    client = SteamClient(api_key="test")
+    assert client.users is not None
+    assert client.players is not None
+    assert client.apps is not None
+    assert client.news is not None
+    assert client.user_stats is not None
+    assert client.auth is not None
+    assert client.econ is not None
+    assert client.community_api is not None
+    assert client.community is not None
+    assert client.groups is not None
+    assert client.store is not None
+    assert client.published_files is not None
+    assert client.published_item_search is not None
+    assert client.published_item_voting is not None
+    assert client.remote_storage is not None
+    assert client.webapi_util is not None
+    assert not hasattr(client, "broadcast")
+    assert not hasattr(client, "cheat_reporting")
+    assert not hasattr(client, "cloud")
+    assert not hasattr(client, "econ_market")
+    assert not hasattr(client, "game_notifications")
+    assert not hasattr(client, "leaderboards")
+    assert not hasattr(client, "microtxn")
+    assert not hasattr(client, "user_auth")
+    assert not hasattr(client, "workshop")
+    client.close()
+
+
+def test_community_credentials_build_cookie_from_access_token() -> None:
+    credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        access_token="token123",
+    )
+    assert credentials.steam_login_secure_value == "76561197960435530%7C%7Ctoken123"
+
+
+def test_users_service_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"ownsapp": True}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.users.check_app_ownership("76561197960435530", 440)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamUser/CheckAppOwnership/v4/"
+    assert call["params"]["steamid"] == "76561197960435530"
+    assert call["params"]["appid"] == 440
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
 def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
     session = RecordingSession(DummyResponse(json_data={"price_info": {}}))
     client = SteamClient(api_key="test", session=session)
@@ -206,6 +171,34 @@ def test_get_app_price_info_rejects_more_than_100_app_ids() -> None:
     with pytest.raises(SteamValidationError):
         client.users.get_app_price_info("76561197960435530", list(range(1, 102)))
 
+    client.close()
+
+
+def test_apps_service_uses_server_list_endpoint() -> None:
+    session = RecordingSession(DummyResponse(json_data={"response": {"servers": []}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.apps.get_server_list("\\appid\\570", limit=5)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamApps/GetServerList/v1/"
+    assert call["params"]["filter"] == "\\appid\\570"
+    assert call["params"]["limit"] == 5
+    assert call["params"]["key"] == "test"
+    client.close()
+
+
+def test_news_service_authed_method_uses_api_base_url() -> None:
+    session = RecordingSession(DummyResponse(json_data={"appnews": {}}))
+    client = SteamClient(api_key="test", session=session)
+
+    client.news.get_news_for_app_authed(440, count=1)
+
+    call = session.calls[0]
+    assert call["url"] == "https://api.steampowered.com/ISteamNews/GetNewsForAppAuthed/v2/"
+    assert call["params"]["appid"] == 440
+    assert call["params"]["count"] == 1
+    assert call["params"]["key"] == "test"
     client.close()
 
 
@@ -245,213 +238,7 @@ def test_published_files_query_uses_public_base_url() -> None:
     assert call["params"]["return_playtime_stats"] == 7
     assert '"required_kv_tags":[{"key":"mode","value":"ranked"}]' in call["params"]["input_json"]
     assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_published_files_write_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"success": 1}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.published_files.set_developer_metadata("123456", 570, "hello")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IPublishedFileService/SetDeveloperMetadata/v1/"
-    assert '"publishedfileid":"123456"' in call["params"]["input_json"]
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"metadata":"hello"' in call["params"]["input_json"]
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_broadcast_service_uses_input_json_on_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.broadcast.post_game_data_frame(570, "76561197960435530", "123456", "{\"score\":42}")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IBroadcastService/PostGameDataFrame/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
-    assert '"broadcast_id":"123456"' in call["params"]["input_json"]
-    assert '"frame_data":"{\\"score\\":42}"' in call["params"]["input_json"]
-    client.close()
-
-
-def test_cheat_reporting_report_player_cheating_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"reportid": "123"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cheat_reporting.report_player_cheating(
-        "76561197972495328",
-        570,
-        reporter_steam_id="76561197960435530",
-        app_data="7",
-        heuristic=True,
-        detection=False,
-        player_report=True,
-        no_report_id=False,
-        game_mode=0,
-        suspicion_start_time=0,
-        severity=5,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/ReportPlayerCheating/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"steamid":"76561197972495328"' in call["params"]["input_json"]
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"steamidreporter":"76561197960435530"' in call["params"]["input_json"]
-    assert '"appdata":"7"' in call["params"]["input_json"]
-    assert '"heuristic":true' in call["params"]["input_json"]
-    assert '"detection":false' in call["params"]["input_json"]
-    assert '"playerreport":true' in call["params"]["input_json"]
-    assert '"noreportid":false' in call["params"]["input_json"]
-    assert '"gamemode":0' in call["params"]["input_json"]
-    assert '"suspicionstarttime":0' in call["params"]["input_json"]
-    assert '"severity":5' in call["params"]["input_json"]
-    client.close()
-
-
-def test_cheat_reporting_get_cheating_reports_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"reports": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cheat_reporting.get_cheating_reports(
-        570,
-        0,
-        0,
-        "0",
-        include_reports=True,
-        include_bans=False,
-        steam_id="76561197972495328",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/GetCheatingReports/v1/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["timeend"] == 0
-    assert call["params"]["timebegin"] == 0
-    assert call["params"]["reportidmin"] == "0"
-    assert call["params"]["includereports"] == 1
-    assert call["params"]["includebans"] == 0
-    assert call["params"]["steamid"] == "76561197972495328"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_cheat_reporting_request_vac_status_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cheat_reporting.request_vac_status_for_user(
-        "76561197972495328",
-        570,
-        session_id="123456",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICheatReportingService/RequestVacStatusForUser/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"steamid":"76561197972495328"' in call["params"]["input_json"]
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"session_id":"123456"' in call["params"]["input_json"]
-    client.close()
-
-
-def test_microtxn_get_user_info_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"params": {"country": "US"}}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.microtxn.get_user_info(570, steam_id="76561197960435530")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/GetUserInfo/v2/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["steamid"] == "76561197960435530"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_microtxn_query_txn_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"result": "OK"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.microtxn.query_txn(570, order_id="0", trans_id="123456")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/QueryTxn/v3/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["orderid"] == "0"
-    assert call["params"]["transid"] == "123456"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_microtxn_get_report_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"result": "OK"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.microtxn.get_report(
-        570,
-        "2026-01-01T00:00:00Z",
-        report_type="GAMESALES",
-        max_results=1000,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamMicroTxn/GetReport/v5/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["time"] == "2026-01-01T00:00:00Z"
-    assert call["params"]["type"] == "GAMESALES"
-    assert call["params"]["maxresults"] == 1000
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_econ_market_get_market_eligibility_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"allowed": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.econ_market.get_market_eligibility("76561197960435530")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IEconMarketService/GetMarketEligibility/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
-    client.close()
-
-
-def test_econ_market_get_popular_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"results": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.econ_market.get_popular("en", rows=10, start=0, filter_app_id=730, ecurrency=1)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IEconMarketService/GetPopular/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"language":"en"' in call["params"]["input_json"]
-    assert '"rows":10' in call["params"]["input_json"]
-    assert '"start":0' in call["params"]["input_json"]
-    assert '"filter_appid":730' in call["params"]["input_json"]
-    assert '"ecurrency":1' in call["params"]["input_json"]
-    client.close()
-
-
-def test_econ_market_cancel_app_listings_for_user_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.econ_market.cancel_app_listings_for_user(730, "76561197960435530", synchronous=True)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IEconMarketService/CancelAppListingsForUser/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":730' in call["params"]["input_json"]
-    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
-    assert '"synchronous":true' in call["params"]["input_json"]
+    assert not hasattr(client.published_files, "set_developer_metadata")
     client.close()
 
 
@@ -532,259 +319,6 @@ def test_published_item_voting_uses_api_base_url_and_form_arrays() -> None:
     client.close()
 
 
-def test_user_auth_ticket_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"steamid": "76561197960435530"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.user_auth.authenticate_user_ticket(570, "abcdef", "server-1")
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["ticket"] == "abcdef"
-    assert call["params"]["identity"] == "server-1"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_user_auth_authenticate_user_hex_encodes_binary_inputs() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"token": "ok"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.user_auth.authenticate_user(
-        "76561197960435530",
-        session_key=b"\xaa\xbb",
-        encrypted_login_key=b"\x01\x02",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamUserAuth/AuthenticateUser/v1/"
-    assert call["data"]["sessionkey"] == "aabb"
-    assert call["data"]["encrypted_loginkey"] == "0102"
-    client.close()
-
-
-def test_workshop_service_uses_input_json_on_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.workshop.set_item_payment_rules(
-        570,
-        99,
-        associated_workshop_files=[{"publishedfileid": "123456"}],
-        partner_accounts=[{"partner_account_id": 1, "percentage": 100}],
-        make_workshop_files_subscribable=True,
-        validate_only=True,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IWorkshopService/SetItemPaymentRules/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"gameitemid":99' in call["params"]["input_json"]
-    assert '"validate_only":true' in call["params"]["input_json"]
-    assert '"make_workshop_files_subscribable":true' in call["params"]["input_json"]
-    client.close()
-
-
-def test_workshop_get_item_daily_revenue_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"revenue": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.workshop.get_item_daily_revenue(570, 10, 0, 86400)
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IWorkshopService/GetItemDailyRevenue/v1/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["item_id"] == 10
-    assert call["params"]["date_start"] == 0
-    assert call["params"]["date_end"] == 86400
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_user_stats_set_user_stats_for_game_uses_indexed_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.user_stats.set_user_stats_for_game(
-        "76561197960435530",
-        570,
-        {"kills_total": 5, "has_completed_tutorial": True},
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamUserStats/SetUserStatsForGame/v1/"
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["count"] == 2
-    assert call["data"]["name[0]"] == "kills_total"
-    assert call["data"]["value[0]"] == 5
-    assert call["data"]["name[1]"] == "has_completed_tutorial"
-    assert call["data"]["value[1]"] == 1
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_community_api_report_abuse_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"eresult": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.community_api.report_abuse(
-        "76561197960435530",
-        "76561197972495328",
-        570,
-        1,
-        2,
-        "Test report",
-        gid="1234567890",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamCommunity/ReportAbuse/v1/"
-    assert call["data"]["steamidActor"] == "76561197960435530"
-    assert call["data"]["steamidTarget"] == "76561197972495328"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["abuseType"] == 1
-    assert call["data"]["contentType"] == 2
-    assert call["data"]["description"] == "Test report"
-    assert call["data"]["gid"] == "1234567890"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_cloud_enumerate_user_files_uses_access_token_params() -> None:
-    session = RecordingSession(DummyResponse(json_data={"files": [], "total_files": 0}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cloud.enumerate_user_files(
-        "token-123",
-        570,
-        extended_details=True,
-        count=100,
-        start_index=0,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICloudService/EnumerateUserFiles/v1/"
-    assert call["params"]["access_token"] == "token-123"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["extended_details"] == 1
-    assert call["params"]["count"] == 100
-    assert call["params"]["start_index"] == 0
-    assert "key" not in call["params"]
-    client.close()
-
-
-def test_cloud_begin_app_upload_batch_uses_input_json_form_body() -> None:
-    session = RecordingSession(DummyResponse(json_data={"batch_id": "123"}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cloud.begin_app_upload_batch(
-        "token-123",
-        570,
-        "Steam Deck",
-        files_to_upload=["save1.sav"],
-        files_to_delete=["save_old.sav"],
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICloudService/BeginAppUploadBatch/v1/"
-    assert call["data"]["access_token"] == "token-123"
-    assert '"appid":570' in call["data"]["input_json"]
-    assert '"machine_name":"Steam Deck"' in call["data"]["input_json"]
-    assert '"files_to_upload":["save1.sav"]' in call["data"]["input_json"]
-    assert '"files_to_delete":["save_old.sav"]' in call["data"]["input_json"]
-    client.close()
-
-
-def test_cloud_begin_http_upload_uses_input_json_form_body() -> None:
-    session = RecordingSession(DummyResponse(json_data={"url_host": "example.com"}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.cloud.begin_http_upload(
-        "token-123",
-        570,
-        2048,
-        "save1.sav",
-        "0123456789abcdef0123456789abcdef01234567",
-        "123456",
-        platforms_to_sync=["all", "windows"],
-        is_public=False,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ICloudService/BeginHTTPUpload/v1/"
-    assert call["data"]["access_token"] == "token-123"
-    assert '"file_size":2048' in call["data"]["input_json"]
-    assert '"filename":"save1.sav"' in call["data"]["input_json"]
-    assert '"file_sha":"0123456789abcdef0123456789abcdef01234567"' in call["data"]["input_json"]
-    assert '"upload_batch_id":"123456"' in call["data"]["input_json"]
-    assert '"platforms_to_sync":["all","windows"]' in call["data"]["input_json"]
-    assert '"is_public":false' in call["data"]["input_json"]
-    client.close()
-
-
-def test_game_notifications_create_session_uses_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"sessionid": "123"}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.game_notifications.create_session(
-        570,
-        "match-1",
-        "Competitive Match",
-        [{"steamid": "76561197960435530"}],
-        steam_id="76561197960435530",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/CreateSession/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"context":"match-1"' in call["params"]["input_json"]
-    assert '"title":"Competitive Match"' in call["params"]["input_json"]
-    assert '"users":[{"steamid":"76561197960435530"}]' in call["params"]["input_json"]
-    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
-    client.close()
-
-
-def test_game_notifications_enumerate_sessions_uses_get_service_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"sessions": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.game_notifications.enumerate_sessions_for_app(
-        570,
-        "76561197960435530",
-        include_all_user_messages=True,
-        include_auth_user_message=False,
-        language="en",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/EnumerateSessionsForApp/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"steamid":"76561197960435530"' in call["params"]["input_json"]
-    assert '"include_all_user_messages":true' in call["params"]["input_json"]
-    assert '"include_auth_user_message":false' in call["params"]["input_json"]
-    assert '"language":"en"' in call["params"]["input_json"]
-    client.close()
-
-
-def test_game_notifications_delete_session_batch_uses_session_id_list() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"success": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.game_notifications.delete_session_batch(570, ["123", 456])
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/IGameNotificationsService/DeleteSessionBatch/v1/"
-    assert call["params"]["key"] == "test"
-    assert '"appid":570' in call["params"]["input_json"]
-    assert '"sessionids":["123","456"]' in call["params"]["input_json"]
-    client.close()
-
-
 def test_econ_get_trade_history_uses_api_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"trades": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -852,83 +386,6 @@ def test_econ_flush_inventory_cache_uses_api_base_url() -> None:
     assert call["data"]["steamid"] == "76561197960435530"
     assert call["data"]["appid"] == 730
     assert call["data"]["contextid"] == "2"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_leaderboards_find_or_create_uses_api_base_url() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"leaderboardid": 1}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.leaderboards.find_or_create_leaderboard(
-        570,
-        "BestTimes",
-        sort_method="Ascending",
-        display_type="TimeSeconds",
-        create_if_not_found=True,
-        only_trusted_writes=True,
-        only_friends_reads=False,
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/FindOrCreateLeaderboard/v2/"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["name"] == "BestTimes"
-    assert call["data"]["sortmethod"] == "Ascending"
-    assert call["data"]["displaytype"] == "TimeSeconds"
-    assert call["data"]["createifnotfound"] == 1
-    assert call["data"]["onlytrustedwrites"] == 1
-    assert call["data"]["onlyfriendsreads"] == 0
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_leaderboards_get_entries_uses_signed_ranges() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"entries": []}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.leaderboards.get_leaderboard_entries(
-        570,
-        123,
-        -5,
-        5,
-        "RequestAroundUser",
-        steam_id="76561197960435530",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/GetLeaderboardEntries/v1/"
-    assert call["params"]["appid"] == 570
-    assert call["params"]["leaderboardid"] == 123
-    assert call["params"]["rangestart"] == -5
-    assert call["params"]["rangeend"] == 5
-    assert call["params"]["datarequest"] == "RequestAroundUser"
-    assert call["params"]["steamid"] == "76561197960435530"
-    assert call["params"]["key"] == "test"
-    client.close()
-
-
-def test_leaderboards_set_score_hex_encodes_details() -> None:
-    session = RecordingSession(DummyResponse(json_data={"response": {"score_changed": True}}))
-    client = SteamClient(api_key="test", session=session)
-
-    client.leaderboards.set_leaderboard_score(
-        570,
-        123,
-        "76561197960435530",
-        999,
-        "KeepBest",
-        details=b"\x00\xff",
-    )
-
-    call = session.calls[0]
-    assert call["url"] == "https://api.steampowered.com/ISteamLeaderboards/SetLeaderboardScore/v1/"
-    assert call["data"]["appid"] == 570
-    assert call["data"]["leaderboardid"] == 123
-    assert call["data"]["steamid"] == "76561197960435530"
-    assert call["data"]["score"] == 999
-    assert call["data"]["scoremethod"] == "KeepBest"
-    assert call["data"]["details"] == "00ff"
     assert call["params"]["key"] == "test"
     client.close()
 
