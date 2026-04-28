@@ -174,34 +174,30 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Trade Offers",
-        lambda: "response_keys={0}".format(
-            sorted(
-                client.econ.get_trade_offers(
-                    get_sent_offers=True,
-                    get_received_offers=True,
-                    get_descriptions=False,
-                    language="en",
-                    active_only=True,
-                    historical_only=False,
-                    time_historical_cutoff=0,
-                ).keys()
+        lambda: _format_trade_offers(
+            client.econ.get_trade_offers(
+                get_sent_offers=True,
+                get_received_offers=True,
+                get_descriptions=False,
+                language="en",
+                active_only=True,
+                historical_only=False,
+                time_historical_cutoff=0,
             )
         ),
     )
     run_check(
         "Get Trade History",
-        lambda: "response_keys={0}".format(
-            sorted(
-                client.econ.get_trade_history(
-                    max_trades=10,
-                    start_after_time=0,
-                    start_after_trade_id="1",
-                    navigating_back=False,
-                    get_descriptions=False,
-                    language="en",
-                    include_failed=False,
-                    include_total=True,
-                ).keys()
+        lambda: _format_trade_history(
+            client.econ.get_trade_history(
+                max_trades=10,
+                start_after_time=0,
+                start_after_trade_id="1",
+                navigating_back=False,
+                get_descriptions=False,
+                language="en",
+                include_failed=False,
+                include_total=True,
             )
         ),
     )
@@ -368,6 +364,30 @@ def _format_optional_count(payload: dict, key: str) -> str:
     if value is None:
         return "{0}=unavailable".format(key)
     return "{0}={1}".format(key, value)
+
+
+def _format_trade_offers(payload: dict) -> str:
+    sent = len(payload.get("trade_offers_sent", []))
+    received = len(payload.get("trade_offers_received", []))
+    descriptions = len(payload.get("descriptions", []))
+    next_cursor = payload.get("next_cursor", 0)
+    return "sent={0} received={1} descriptions={2} next_cursor={3}".format(
+        sent,
+        received,
+        descriptions,
+        next_cursor,
+    )
+
+
+def _format_trade_history(payload: dict) -> str:
+    total_trades = payload.get("total_trades")
+    trades = payload.get("trades", [])
+    more = payload.get("more")
+    return "total_trades={0} returned={1} more={2}".format(
+        total_trades if total_trades is not None else "unavailable",
+        len(trades),
+        more,
+    )
 
 
 def parse_args() -> argparse.Namespace:
