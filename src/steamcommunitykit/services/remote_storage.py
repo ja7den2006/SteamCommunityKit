@@ -6,6 +6,7 @@ from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import (
     ensure_not_blank,
     normalize_uint64_ids,
+    normalize_published_file_id,
     validate_app_id,
     validate_steam_id,
     validate_uint64,
@@ -17,8 +18,17 @@ class RemoteStorageService:
         self.transport = transport
         self.base_url = f"{WEB_API_BASE_URL}/ISteamRemoteStorage"
 
+    @staticmethod
+    def _normalize_published_file_ids(published_file_ids):
+        if isinstance(published_file_ids, (str, int)):
+            return [normalize_published_file_id(published_file_ids)]
+        normalized = [normalize_published_file_id(value) for value in published_file_ids]
+        if not normalized:
+            raise SteamValidationError("published_file_ids cannot be empty.")
+        return normalized
+
     def get_collection_details(self, published_file_ids) -> dict:
-        normalized_ids = normalize_uint64_ids(published_file_ids, "published_file_id")
+        normalized_ids = self._normalize_published_file_ids(published_file_ids)
         data = {"collectioncount": len(normalized_ids)}
         for index, published_file_id in enumerate(normalized_ids):
             data["publishedfileids[{0}]".format(index)] = published_file_id
@@ -83,7 +93,7 @@ class RemoteStorageService:
         }
 
     def get_published_file_details(self, published_file_ids) -> dict:
-        normalized_ids = normalize_uint64_ids(published_file_ids, "published_file_id")
+        normalized_ids = self._normalize_published_file_ids(published_file_ids)
         data = {"itemcount": len(normalized_ids)}
         for index, published_file_id in enumerate(normalized_ids):
             data["publishedfileids[{0}]".format(index)] = published_file_id
@@ -124,12 +134,13 @@ class RemoteStorageService:
         }
 
     def get_collection_detail(self, published_file_id) -> dict:
-        details = self.get_collection_details_summary([published_file_id]).get("collections", [])
+        normalized_published_file_id = normalize_published_file_id(published_file_id)
+        details = self.get_collection_details_summary([normalized_published_file_id]).get("collections", [])
         if not details:
             raise SteamNotFoundError(
                 "Steam did not return a collection detail for the requested id.",
                 status_code=404,
-                payload={"published_file_id": str(published_file_id)},
+                payload={"published_file_id": str(normalized_published_file_id)},
             )
         first = details[0]
         if int(first.get("result", 0) or 0) != 1:
@@ -229,13 +240,14 @@ class RemoteStorageService:
         }
 
     def get_published_file_detail(self, published_file_id) -> dict:
-        detail_payload = self.get_published_file_details_summary([published_file_id])
+        normalized_published_file_id = normalize_published_file_id(published_file_id)
+        detail_payload = self.get_published_file_details_summary([normalized_published_file_id])
         details = detail_payload.get("items", [])
         if not details:
             raise SteamNotFoundError(
                 "Steam did not return a published file detail for the requested id.",
                 status_code=404,
-                payload={"published_file_id": str(published_file_id)},
+                payload={"published_file_id": str(normalized_published_file_id)},
             )
         return details[0]
 

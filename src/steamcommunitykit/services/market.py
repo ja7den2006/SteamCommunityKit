@@ -496,6 +496,7 @@ class MarketService:
         country: str = "US",
         language: str = "english",
         currency: int = 1,
+        two_factor: int = 0,
     ) -> dict:
         if item_name_id is None:
             if app_id is None or market_hash_name is None:
@@ -511,6 +512,7 @@ class MarketService:
                 "country": ensure_not_blank(country, "country"),
                 "language": ensure_not_blank(language, "language"),
                 "currency": validate_uint32(currency, "currency"),
+                "two_factor": validate_uint32(two_factor, "two_factor", allow_zero=True),
             },
         )
 
@@ -543,6 +545,7 @@ class MarketService:
         country: str = "US",
         language: str = "english",
         currency: int = 1,
+        two_factor: int = 0,
     ) -> dict:
         if item_name_id is None:
             if app_id is None or market_hash_name is None:
@@ -555,6 +558,7 @@ class MarketService:
             country=country,
             language=language,
             currency=currency,
+            two_factor=two_factor,
         )
         return {
             "success": histogram.get("success"),

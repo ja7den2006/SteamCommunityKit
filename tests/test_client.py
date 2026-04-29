@@ -15,6 +15,8 @@ from steamcommunitykit import (
     build_steam_profile_url,
     build_trade_offer_url,
     build_workshop_file_url,
+    normalize_group_slug,
+    normalize_published_file_id,
     parse_group_url,
     parse_market_listing_url,
     parse_steam_profile_url,
@@ -352,6 +354,14 @@ def test_market_listing_url_helpers_build_and_parse() -> None:
     assert parsed["app_id"] == 730
     assert parsed["market_hash_name"] == "AK-47 | Redline (Field-Tested)"
     assert parsed["market_url"] == market_url
+
+
+def test_group_slug_normalizer_accepts_full_group_url() -> None:
+    assert normalize_group_slug("https://steamcommunity.com/groups/steamdb/") == "steamdb"
+
+
+def test_published_file_id_normalizer_accepts_full_workshop_url() -> None:
+    assert normalize_published_file_id("https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689") == "3210489689"
 
 
 def test_users_service_uses_public_player_summaries_endpoint() -> None:
@@ -1066,6 +1076,29 @@ def test_remote_storage_get_published_file_detail_normalizes_result() -> None:
     client.close()
 
 
+def test_remote_storage_get_published_file_detail_accepts_workshop_url() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "publishedfiledetails": [
+                        {"publishedfileid": "3210489689", "result": 1, "title": "Example Workshop Item"}
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_published_file_detail(
+        "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
+    )
+
+    assert result["published_file_id"] == "3210489689"
+    assert session.calls[0]["data"]["publishedfileids[0]"] == "3210489689"
+    client.close()
+
+
 def test_remote_storage_get_published_file_details_summary_normalizes_and_maps_items() -> None:
     session = RecordingSession(
         DummyResponse(
@@ -1222,6 +1255,34 @@ def test_remote_storage_get_collection_child_details_expands_children() -> None:
     assert result["collection"]["published_file_id"] == "2682416130"
     assert result["child_ids"] == ["111"]
     assert result["children"][0]["title"] == "Child Item"
+    client.close()
+
+
+def test_remote_storage_get_collection_detail_accepts_workshop_url() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "collectiondetails": [
+                        {
+                            "publishedfileid": "3210489689",
+                            "result": 1,
+                            "childcount": 1,
+                            "children": [{"publishedfileid": "111"}],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_collection_detail(
+        "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
+    )
+
+    assert result["published_file_id"] == "3210489689"
+    assert session.calls[0]["data"]["publishedfileids[0]"] == "3210489689"
     client.close()
 
 
@@ -2408,6 +2469,7 @@ def test_market_get_item_orders_histogram_uses_item_name_id_lookup() -> None:
     assert result["success"] == 1
     assert session.calls[1]["url"] == "https://steamcommunity.com/market/itemordershistogram"
     assert session.calls[1]["params"]["item_nameid"] == 7178002
+    assert session.calls[1]["params"]["two_factor"] == 0
     client.close()
 
 
@@ -2547,6 +2609,58 @@ def test_market_price_snapshot_combines_price_orders_and_listings() -> None:
     client.market.get_item_name_id = original_get_item_name_id
     client.market.get_price_overview = original_get_price_overview
     client.market.get_item_orders_summary = original_get_item_orders_summary
+    client.market.get_item_listings_summary = original_get_item_listings_summary
+    client.close()
+
+
+def test_client_market_helpers_accept_listing_url() -> None:
+    client = SteamClient()
+
+    original_get_price_overview = client.market.get_price_overview
+    original_get_price_history = client.market.get_price_history
+    original_get_price_history_summary = client.market.get_price_history_summary
+    original_get_market_price_snapshot = client.market.get_market_price_snapshot
+    original_get_item_listings_summary = client.market.get_item_listings_summary
+
+    client.market.get_price_overview = lambda app_id, market_hash_name, **kwargs: {
+        "appid": app_id,
+        "market_hash_name": market_hash_name,
+        "lowest_price": "$1.23",
+    }
+    client.market.get_price_history = lambda app_id, market_hash_name: {
+        "appid": app_id,
+        "market_hash_name": market_hash_name,
+        "prices": [],
+    }
+    client.market.get_price_history_summary = lambda app_id, market_hash_name: {
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "point_count": 0,
+    }
+    client.market.get_market_price_snapshot = lambda app_id, market_hash_name, **kwargs: {
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "listing_count": 5,
+    }
+    client.market.get_item_listings_summary = lambda app_id, market_hash_name, **kwargs: {
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "total_count": 5,
+        "listings": [],
+    }
+
+    market_url = "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Example"
+
+    assert client.get_market_price_overview_by_url(market_url)["market_hash_name"] == "AK-47 | Example"
+    assert client.get_market_price_history_by_url(market_url)["appid"] == 730
+    assert client.get_market_price_history_summary_by_url(market_url)["app_id"] == 730
+    assert client.get_market_price_snapshot_by_url(market_url)["listing_count"] == 5
+    assert client.get_market_item_listings_summary_by_url(market_url)["total_count"] == 5
+
+    client.market.get_price_overview = original_get_price_overview
+    client.market.get_price_history = original_get_price_history
+    client.market.get_price_history_summary = original_get_price_history_summary
+    client.market.get_market_price_snapshot = original_get_market_price_snapshot
     client.market.get_item_listings_summary = original_get_item_listings_summary
     client.close()
 
@@ -3331,6 +3445,39 @@ def test_groups_get_group_details_parses_memberslist_xml() -> None:
     assert details["members_online"] == 67
     assert details["total_pages"] == 3
     assert details["current_page"] == 2
+    client.close()
+
+
+def test_groups_get_group_details_accepts_full_group_url() -> None:
+    xml = """
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <memberList>
+      <groupID64>103582791429521412</groupID64>
+      <groupDetails>
+        <groupName><![CDATA[Valve]]></groupName>
+        <groupURL><![CDATA[Valve]]></groupURL>
+        <headline><![CDATA[VALVE]]></headline>
+        <summary><![CDATA[Test summary]]></summary>
+        <avatarIcon><![CDATA[https://example.com/icon.jpg]]></avatarIcon>
+        <avatarMedium><![CDATA[https://example.com/medium.jpg]]></avatarMedium>
+        <avatarFull><![CDATA[https://example.com/full.jpg]]></avatarFull>
+        <memberCount>152</memberCount>
+        <membersInChat>53</membersInChat>
+        <membersInGame>0</membersInGame>
+        <membersOnline>67</membersOnline>
+      </groupDetails>
+      <memberCount>152</memberCount>
+      <totalPages>1</totalPages>
+      <currentPage>1</currentPage>
+    </memberList>
+    """
+    session = RecordingSession(DummyResponse(text=xml))
+    client = SteamClient(session=session)
+
+    details = client.get_group_details("https://steamcommunity.com/groups/Valve/")
+
+    assert details["group_name"] == "Valve"
+    assert "/groups/Valve/memberslistxml/" in session.calls[0]["url"]
     client.close()
 
 

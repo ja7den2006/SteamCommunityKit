@@ -395,6 +395,14 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Published File Detail From URL",
+        lambda: _format_published_file_detail(
+            client.get_published_file_detail(
+                build_workshop_file_url(_require_workshop_item_id(workshop_cache, args))
+            )
+        ),
+    )
+    run_check(
         "Get Collection Details",
         lambda: _format_collection_details(client.get_collection_details([args.collection_published_file_id])),
     )
@@ -622,6 +630,15 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Price Snapshot By URL",
+        lambda: _format_market_price_snapshot(
+            client.get_market_price_snapshot_by_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name),
+                listings_count=10,
+            )
+        ),
+    )
+    run_check(
         "Market Listings Summary",
         lambda: _format_market_listings_summary(
             client.get_market_item_listings_summary(
@@ -659,6 +676,12 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Fetch Group ID64 (Public)",
         lambda: client.get_group_id64(args.group_url),
+    )
+    run_check(
+        "Get Group Details From URL (Public)",
+        lambda: _format_group_details(
+            client.get_group_details(build_group_url(args.group_url))
+        ),
     )
     run_check(
         "Get Large Group Members (Public)",
@@ -1059,6 +1082,14 @@ def _format_group_member_summaries(payload: dict) -> str:
     members = payload.get("members", [])
     first_name = members[0].get("personaname") if members else "<none>"
     return "members={0} first={1}".format(len(members), first_name)
+
+
+def _format_group_details(payload: dict) -> str:
+    return "group={0} members={1} online={2}".format(
+        _safe_console_text(payload.get("group_name") or "<none>"),
+        payload.get("member_count"),
+        payload.get("members_online"),
+    )
 
 
 def _format_market_orders_summary(payload: dict) -> str:

@@ -281,6 +281,14 @@ def parse_group_url(group_url: str) -> Dict[str, str]:
     }
 
 
+def normalize_group_slug(group_slug_or_url: str) -> str:
+    normalized = ensure_not_blank(group_slug_or_url, "group_slug_or_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme or parsed.netloc:
+        return parse_group_url(normalized)["group_slug"]
+    return normalized.strip("/")
+
+
 def build_workshop_file_url(published_file_id: Union[str, int]) -> str:
     normalized_id = validate_uint64(published_file_id, "published_file_id")
     return "https://steamcommunity.com/sharedfiles/filedetails/?id={0}".format(
@@ -312,6 +320,16 @@ def parse_workshop_file_url(workshop_url: str) -> Dict[str, str]:
         "published_file_id": normalized_id,
         "workshop_url": build_workshop_file_url(normalized_id),
     }
+
+
+def normalize_published_file_id(published_file_id_or_url: Union[str, int]) -> str:
+    if isinstance(published_file_id_or_url, int):
+        return validate_uint64(published_file_id_or_url, "published_file_id")
+    normalized = ensure_not_blank(str(published_file_id_or_url), "published_file_id")
+    parsed = urlparse(normalized)
+    if parsed.scheme or parsed.netloc:
+        return parse_workshop_file_url(normalized)["published_file_id"]
+    return validate_uint64(normalized, "published_file_id")
 
 
 def build_market_listing_url(app_id: Union[str, int], market_hash_name: str) -> str:

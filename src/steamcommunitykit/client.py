@@ -25,7 +25,7 @@ from steamcommunitykit.services import (
     UsersService,
     WebAPIUtilService,
 )
-from steamcommunitykit.utils import load_api_key_from_json
+from steamcommunitykit.utils import load_api_key_from_json, parse_market_listing_url
 
 
 class SteamClient:
@@ -768,6 +768,14 @@ class SteamClient:
             currency=currency,
         )
 
+    def get_market_price_overview_by_url(self, market_url: str, *, currency: int = 1) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_price_overview(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            currency=currency,
+        )
+
     def get_market_item_name_id(self, app_id, market_hash_name: str) -> int:
         return self.market.get_item_name_id(app_id, market_hash_name)
 
@@ -816,8 +824,22 @@ class SteamClient:
     def get_market_price_history(self, app_id, market_hash_name: str) -> dict:
         return self.market.get_price_history(app_id, market_hash_name)
 
+    def get_market_price_history_by_url(self, market_url: str) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_price_history(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+        )
+
     def get_market_price_history_summary(self, app_id, market_hash_name: str) -> dict:
         return self.market.get_price_history_summary(app_id, market_hash_name)
+
+    def get_market_price_history_summary_by_url(self, market_url: str) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_price_history_summary(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+        )
 
     def get_market_price_snapshot(
         self,
@@ -838,6 +860,25 @@ class SteamClient:
             listings_count=listings_count,
         )
 
+    def get_market_price_snapshot_by_url(
+        self,
+        market_url: str,
+        *,
+        currency: int = 1,
+        country: str = "US",
+        language: str = "english",
+        listings_count: int = 10,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_price_snapshot(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            currency=currency,
+            country=country,
+            language=language,
+            listings_count=listings_count,
+        )
+
     def get_market_item_listings_summary(
         self,
         app_id,
@@ -852,6 +893,27 @@ class SteamClient:
         return self.market.get_item_listings_summary(
             app_id,
             market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+
+    def get_market_item_listings_summary_by_url(
+        self,
+        market_url: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_item_listings_summary(
+            parsed["app_id"],
+            parsed["market_hash_name"],
             start=start,
             count=count,
             country=country,

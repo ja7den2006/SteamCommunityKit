@@ -15,12 +15,16 @@ from steamcommunitykit.exceptions import (
 )
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import AvailabilityResult, CreatedGroup
-from steamcommunitykit.utils import ensure_not_blank
+from steamcommunitykit.utils import ensure_not_blank, normalize_group_slug
 
 
 class GroupsService:
     def __init__(self, transport: SteamHTTPTransport) -> None:
         self.transport = transport
+
+    @staticmethod
+    def _normalize_group_url_value(group_url: str) -> str:
+        return normalize_group_slug(group_url)
 
     def _community_cookies(self) -> Dict[str, str]:
         credentials = self.transport.require_community_credentials()
@@ -105,9 +109,10 @@ class GroupsService:
         return self._availability_check("abbreviation", abbreviation)
 
     def fetch_group_id64(self, group_url: str) -> str:
+        normalized_group_url = self._normalize_group_url_value(group_url)
         response_text = self.transport.request(
             "GET",
-            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
+            f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}/memberslistxml/",
             params={"xml": "1"},
             cookies=self._optional_community_cookies(),
             expected="text",
@@ -122,9 +127,10 @@ class GroupsService:
         return group_id64
 
     def fetch_group_id(self, group_url: str) -> str:
+        normalized_group_url = self._normalize_group_url_value(group_url)
         response_text = self.transport.request(
             "GET",
-            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/edit",
+            f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}/edit",
             cookies=self._community_cookies(),
             expected="text",
         )
@@ -138,9 +144,10 @@ class GroupsService:
         return group_id.strip()
 
     def get_group_details(self, group_url: str, page: int = 1) -> dict:
+        normalized_group_url = self._normalize_group_url_value(group_url)
         response_text = self.transport.request(
             "GET",
-            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
+            f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}/memberslistxml/",
             params={"xml": "1", "p": int(page)},
             expected="text",
         )
@@ -169,9 +176,10 @@ class GroupsService:
         }
 
     def get_group_members(self, group_url: str, page: int = 1) -> dict:
+        normalized_group_url = self._normalize_group_url_value(group_url)
         response_text = self.transport.request(
             "GET",
-            f"{COMMUNITY_BASE_URL}/groups/{ensure_not_blank(group_url, 'group_url')}/memberslistxml/",
+            f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}/memberslistxml/",
             params={"xml": "1", "p": int(page)},
             expected="text",
         )
@@ -182,7 +190,7 @@ class GroupsService:
         member_nodes = root.findall("./members/steamID64")
         return {
             "group_id64": root.findtext("groupID64"),
-            "group_url": group_url,
+            "group_url": normalized_group_url,
             "current_page": int(root.findtext("currentPage") or page),
             "total_pages": int(root.findtext("totalPages") or 0),
             "member_count": int(root.findtext("memberCount") or 0),
