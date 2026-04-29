@@ -105,6 +105,26 @@ class SteamClient:
             limit=limit,
         )
 
+    def get_friend_bans_for_user(self, identifier, relationship: str = "friend", limit: int = None, url_type=None) -> list:
+        friend_ids = self.get_friend_ids_for_user(
+            identifier,
+            relationship=relationship,
+            url_type=url_type,
+        )
+        if limit is not None:
+            friend_ids = friend_ids[: int(limit)]
+        return self.users.get_player_bans_summary(friend_ids) if friend_ids else []
+
+    def get_friend_bans_map_for_user(self, identifier, relationship: str = "friend", limit: int = None, url_type=None) -> dict:
+        friend_ids = self.get_friend_ids_for_user(
+            identifier,
+            relationship=relationship,
+            url_type=url_type,
+        )
+        if limit is not None:
+            friend_ids = friend_ids[: int(limit)]
+        return self.users.get_player_bans_map(friend_ids) if friend_ids else {}
+
     def get_user_group_list_for_user(self, identifier, url_type=None) -> dict:
         return self.users.get_user_group_list(
             self.resolve_steam_id(identifier, url_type=url_type),
@@ -201,6 +221,18 @@ class SteamClient:
     def get_group_id64(self, group_url: str) -> str:
         return self.groups.fetch_group_id64(group_url)
 
+    def get_group_id(self, group_url: str) -> str:
+        return self.groups.fetch_group_id(group_url)
+
+    def check_group_name_availability(self, name: str):
+        return self.groups.check_name_availability(name)
+
+    def check_group_url_availability(self, group_url: str):
+        return self.groups.check_url_availability(group_url)
+
+    def check_group_tag_availability(self, abbreviation: str):
+        return self.groups.check_tag_availability(abbreviation)
+
     def get_group_details(self, group_url: str, page: int = 1) -> dict:
         return self.groups.get_group_details(group_url, page=page)
 
@@ -226,6 +258,25 @@ class SteamClient:
             start_page=start_page,
             max_pages=max_pages,
             max_members=max_members,
+        )
+
+    def create_group(
+        self,
+        *,
+        name: str,
+        abbreviation: str,
+        group_url: str,
+        public: bool = True,
+        wait_for_sync: float = 10.0,
+        validate_availability: bool = True,
+    ):
+        return self.groups.create_group(
+            name=name,
+            abbreviation=abbreviation,
+            group_url=group_url,
+            public=public,
+            wait_for_sync=wait_for_sync,
+            validate_availability=validate_availability,
         )
 
     def get_published_file_detail(self, published_file_id) -> dict:
@@ -799,8 +850,68 @@ class SteamClient:
     def get_community_profile_bundle(self, steam_id=None) -> dict:
         return self.community.get_profile_bundle(steam_id)
 
+    def get_account_info(self, steam_id=None) -> dict:
+        return self.community.get_account_info(steam_id)
+
+    def get_profile_edit_state(self, steam_id=None) -> dict:
+        return self.community.get_profile_edit_state(steam_id)
+
+    def get_profile_privacy(self, steam_id=None) -> dict:
+        return self.community.get_profile_privacy(steam_id)
+
+    def get_trade_offer_url(self, steam_id=None) -> dict:
+        return self.community.get_trade_offer_url(steam_id)
+
+    def rotate_trade_offer_url(self, steam_id=None) -> dict:
+        return self.community.rotate_trade_offer_url(steam_id)
+
+    def get_web_api_key_status(self) -> dict:
+        return self.community.get_web_api_key_status()
+
     def get_web_api_key_page_state(self) -> dict:
         return self.community.get_web_api_key_page_state()
+
+    def set_profile_privacy(self, steam_id=None, **kwargs) -> dict:
+        return self.community.set_profile_privacy(steam_id, **kwargs)
+
+    def edit_profile(self, steam_id=None, **kwargs) -> dict:
+        return self.community.edit_profile(steam_id, **kwargs)
+
+    def update_persona_name(self, persona_name: str, steam_id=None) -> dict:
+        return self.community.update_persona_name(steam_id=steam_id, persona_name=persona_name)
+
+    def update_custom_url(self, custom_url: str, steam_id=None) -> dict:
+        return self.community.update_custom_url(custom_url, steam_id=steam_id)
+
+    def update_real_name(self, real_name: str, steam_id=None) -> dict:
+        return self.community.update_real_name(real_name, steam_id=steam_id)
+
+    def update_summary(self, summary: str, steam_id=None) -> dict:
+        return self.community.update_summary(summary, steam_id=steam_id)
+
+    def update_location(
+        self,
+        *,
+        country: Optional[str] = None,
+        state: Optional[str] = None,
+        city: Optional[str] = None,
+        steam_id=None,
+    ) -> dict:
+        return self.community.update_location(
+            country=country,
+            state=state,
+            city=city,
+            steam_id=steam_id,
+        )
+
+    def set_profile_public(self, steam_id=None) -> dict:
+        return self.community.set_profile_public(steam_id)
+
+    def set_profile_private(self, steam_id=None) -> dict:
+        return self.community.set_profile_private(steam_id)
+
+    def upload_avatar(self, image_path: Union[str, Path], steam_id=None) -> dict:
+        return self.community.upload_avatar(image_path, steam_id=steam_id)
 
     def login_to_community(
         self,

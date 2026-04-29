@@ -582,23 +582,28 @@ def run_community_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Account Info",
-        lambda: str(_require_cached(cache, "account_info")),
+        lambda: str(_capture_result(cache, "account_info", client.get_account_info, lambda value: value)),
     )
     run_check(
         "Get Profile Edit State",
-        lambda: "persona={0}".format(_require_cached(cache, "profile_edit_state").get("strPersonaName", "")),
+        lambda: "persona={0}".format(
+            _capture_result(cache, "profile_edit_state", client.get_profile_edit_state, lambda value: value).get(
+                "strPersonaName",
+                "",
+            )
+        ),
     )
     run_check(
         "Get Profile Privacy",
-        lambda: str(_require_cached(cache, "profile_privacy")),
+        lambda: str(_capture_result(cache, "profile_privacy", client.get_profile_privacy, lambda value: value)),
     )
     run_check(
         "Get Trade Offer URL",
-        lambda: _capture_result(cache, "trade_offer_url", client.community.get_trade_offer_url, str),
+        lambda: _capture_result(cache, "trade_offer_url", client.get_trade_offer_url, str),
     )
     run_check(
         "Get Web API Key Status",
-        lambda: _capture_result(cache, "web_api_key_status", client.community.get_web_api_key_status, str),
+        lambda: _capture_result(cache, "web_api_key_status", client.get_web_api_key_status, str),
     )
     run_check(
         "Get Web API Key Page State",
@@ -606,32 +611,39 @@ def run_community_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Fetch Group ID64",
-        lambda: str(client.groups.fetch_group_id64(args.group_url)),
+        lambda: str(client.get_group_id64(args.group_url)),
     )
     run_check(
         "Check Group Name Availability",
-        lambda: str(client.groups.check_name_availability(args.group_name_check)),
+        lambda: str(client.check_group_name_availability(args.group_name_check)),
     )
     run_check(
         "Check Group URL Availability",
-        lambda: str(client.groups.check_url_availability(args.group_name_check)),
+        lambda: str(client.check_group_url_availability(args.group_name_check)),
     )
     run_check(
         "Check Group Tag Availability",
-        lambda: str(client.groups.check_tag_availability(args.group_tag_check)),
+        lambda: str(client.check_group_tag_availability(args.group_tag_check)),
     )
     run_check(
         "Get Group Details",
-        lambda: str(client.groups.get_group_details(args.group_url)),
+        lambda: str(client.get_group_details(args.group_url)),
     )
     run_check(
         "Get Group Members",
-        lambda: "members={0}".format(len(client.groups.get_group_members(args.group_url).get("members", []))),
+        lambda: "members={0}".format(len(client.get_group_members(args.group_url).get("members", []))),
     )
     run_check(
         "Get Group Member Summaries",
         lambda: _format_group_member_summaries(client.get_group_member_summaries(args.group_url, limit=5)),
     )
+    if client.api_key:
+        run_check(
+            "Get Friend Bans",
+            lambda: _format_player_bans_summary(client.get_friend_bans_for_user(args.profile_identifier, limit=5)),
+        )
+    else:
+        print_result("Get Friend Bans", True, "skipped: requires Steam Web API key")
     run_check(
         "Community Cookie Export/Import Roundtrip",
         lambda: _format_cookie_roundtrip(client, args),
@@ -700,15 +712,15 @@ def run_community_suite(client: SteamClient, args) -> None:
     if args.editable_group_url:
         run_check(
             "Fetch Editable Group ID",
-            lambda: str(client.groups.fetch_group_id(args.editable_group_url)),
+            lambda: str(client.get_group_id(args.editable_group_url)),
         )
 
     if args.write_checks:
         run_check(
             "Write Check: Edit Profile With Current Persona",
             lambda: str(
-                client.community.edit_profile(
-                    persona_name=(cache.get("profile_edit_state") or client.community.get_profile_edit_state()).get(
+                client.edit_profile(
+                    persona_name=(cache.get("profile_edit_state") or client.get_profile_edit_state()).get(
                         "strPersonaName",
                         "SteamCommunityKit",
                     )
@@ -719,37 +731,37 @@ def run_community_suite(client: SteamClient, args) -> None:
             "Write Check: Set Profile Privacy With Current Values",
             lambda: _format_privacy_roundtrip(
                 client,
-                cache.get("profile_privacy") or client.community.get_profile_privacy(),
+                cache.get("profile_privacy") or client.get_profile_privacy(),
             ),
         )
         if args.set_persona_name:
             run_check(
                 "Write Check: Set Persona Name",
-                lambda: str(client.community.update_persona_name(persona_name=args.set_persona_name)),
+                lambda: str(client.update_persona_name(args.set_persona_name)),
             )
         if args.set_custom_url:
             run_check(
                 "Write Check: Set Custom URL",
-                lambda: str(client.community.update_custom_url(args.set_custom_url)),
+                lambda: str(client.update_custom_url(args.set_custom_url)),
             )
         if args.set_real_name:
             run_check(
                 "Write Check: Set Real Name",
-                lambda: str(client.community.update_real_name(args.set_real_name)),
+                lambda: str(client.update_real_name(args.set_real_name)),
             )
         if args.set_summary:
             run_check(
                 "Write Check: Set Summary",
-                lambda: str(client.community.update_summary(args.set_summary)),
+                lambda: str(client.update_summary(args.set_summary)),
             )
 
     if args.rotate_trade_url:
         run_check(
             "Write Check: Rotate Trade URL",
-            lambda: str(client.community.rotate_trade_offer_url()),
+            lambda: str(client.rotate_trade_offer_url()),
         )
 
-    if args.write_checks and (cache.get("account_info") or client.community.get_account_info()).get("is_limited"):
+    if args.write_checks and (cache.get("account_info") or client.get_account_info()).get("is_limited"):
         run_check(
             "Expected Denial: Limited Account Group Creation",
             lambda: _expect_limited_group_creation_denial(client),
@@ -758,7 +770,7 @@ def run_community_suite(client: SteamClient, args) -> None:
     if args.write_checks and args.avatar_image:
         run_check(
             "Write Check: Upload Avatar",
-            lambda: str(client.community.upload_avatar(args.avatar_image)),
+            lambda: str(client.upload_avatar(args.avatar_image)),
         )
 
 
@@ -1088,7 +1100,7 @@ def _format_cookie_roundtrip(client: SteamClient, args) -> str:
     roundtrip_client = build_client(args)
     try:
         roundtrip_client.set_community_credentials_from_cookie_string(cookie_string)
-        info = roundtrip_client.community.get_account_info()
+        info = roundtrip_client.get_account_info()
         return "steamid={0} logged_in={1}".format(
             info.get("steamid", "<unknown>"),
             info.get("logged_in", False),
@@ -1105,7 +1117,7 @@ def _capture_result(cache: dict, key: str, fetcher, formatter=str) -> str:
 
 def _format_privacy_roundtrip(client: SteamClient, privacy: dict) -> str:
     settings = privacy.get("PrivacySettings", {})
-    response = client.community.set_profile_privacy(
+    response = client.set_profile_privacy(
         privacy_profile=settings.get("PrivacyProfile", 1),
         privacy_inventory=settings.get("PrivacyInventory", 1),
         privacy_inventory_gifts=settings.get("PrivacyInventoryGifts", 1),
@@ -1120,7 +1132,7 @@ def _format_privacy_roundtrip(client: SteamClient, privacy: dict) -> str:
 def _expect_limited_group_creation_denial(client: SteamClient) -> str:
     suffix = str(int(time.time()))
     try:
-        client.groups.create_group(
+        client.create_group(
             name="steamcommunitykit-{0}".format(suffix),
             abbreviation="sk{0}".format(suffix[-6:]),
             group_url="steamcommunitykit-{0}".format(suffix),

@@ -183,6 +183,88 @@ def test_client_can_get_community_profile_bundle() -> None:
     client.close()
 
 
+def test_client_community_helpers_delegate_to_community_service() -> None:
+    client = SteamClient()
+
+    original_get_account_info = client.community.get_account_info
+    original_get_profile_edit_state = client.community.get_profile_edit_state
+    original_get_profile_privacy = client.community.get_profile_privacy
+    original_get_trade_offer_url = client.community.get_trade_offer_url
+    original_rotate_trade_offer_url = client.community.rotate_trade_offer_url
+    original_get_web_api_key_status = client.community.get_web_api_key_status
+    original_get_web_api_key_page_state = client.community.get_web_api_key_page_state
+    original_set_profile_privacy = client.community.set_profile_privacy
+    original_edit_profile = client.community.edit_profile
+    original_update_persona_name = client.community.update_persona_name
+    original_update_custom_url = client.community.update_custom_url
+    original_update_real_name = client.community.update_real_name
+    original_update_summary = client.community.update_summary
+    original_update_location = client.community.update_location
+    original_set_profile_public = client.community.set_profile_public
+    original_set_profile_private = client.community.set_profile_private
+    original_upload_avatar = client.community.upload_avatar
+
+    client.community.get_account_info = lambda steam_id=None: {"steamid": steam_id or "self"}
+    client.community.get_profile_edit_state = lambda steam_id=None: {"steamid": steam_id or "self", "strPersonaName": "Example"}
+    client.community.get_profile_privacy = lambda steam_id=None: {"steamid": steam_id or "self", "PrivacySettings": {}}
+    client.community.get_trade_offer_url = lambda steam_id=None: {"steamid": steam_id or "self", "token": "abc"}
+    client.community.rotate_trade_offer_url = lambda steam_id=None: {"steamid": steam_id or "self", "token": "rotated"}
+    client.community.get_web_api_key_status = lambda: {"has_access": False}
+    client.community.get_web_api_key_page_state = lambda: {"registration_form_visible": True}
+    client.community.set_profile_privacy = lambda steam_id=None, **kwargs: {"steamid": steam_id or "self", "kwargs": kwargs}
+    client.community.edit_profile = lambda steam_id=None, **kwargs: {"steamid": steam_id or "self", "kwargs": kwargs}
+    client.community.update_persona_name = lambda steam_id=None, persona_name="": {"steamid": steam_id or "self", "persona_name": persona_name}
+    client.community.update_custom_url = lambda custom_url, steam_id=None: {"steamid": steam_id or "self", "custom_url": custom_url}
+    client.community.update_real_name = lambda real_name, steam_id=None: {"steamid": steam_id or "self", "real_name": real_name}
+    client.community.update_summary = lambda summary, steam_id=None: {"steamid": steam_id or "self", "summary": summary}
+    client.community.update_location = lambda country=None, state=None, city=None, steam_id=None: {
+        "steamid": steam_id or "self",
+        "country": country,
+        "state": state,
+        "city": city,
+    }
+    client.community.set_profile_public = lambda steam_id=None: {"steamid": steam_id or "self", "visibility": "public"}
+    client.community.set_profile_private = lambda steam_id=None: {"steamid": steam_id or "self", "visibility": "private"}
+    client.community.upload_avatar = lambda image_path, steam_id=None: {"steamid": steam_id or "self", "image_path": str(image_path)}
+
+    assert client.get_account_info()["steamid"] == "self"
+    assert client.get_profile_edit_state()["strPersonaName"] == "Example"
+    assert client.get_profile_privacy()["steamid"] == "self"
+    assert client.get_trade_offer_url()["token"] == "abc"
+    assert client.rotate_trade_offer_url()["token"] == "rotated"
+    assert client.get_web_api_key_status()["has_access"] is False
+    assert client.get_web_api_key_page_state()["registration_form_visible"] is True
+    assert client.set_profile_privacy(privacy_profile=1)["kwargs"]["privacy_profile"] == 1
+    assert client.edit_profile(persona_name="Name")["kwargs"]["persona_name"] == "Name"
+    assert client.update_persona_name("Name")["persona_name"] == "Name"
+    assert client.update_custom_url("example")["custom_url"] == "example"
+    assert client.update_real_name("Real")["real_name"] == "Real"
+    assert client.update_summary("Summary")["summary"] == "Summary"
+    assert client.update_location(country="US", state="WA", city="Seattle")["city"] == "Seattle"
+    assert client.set_profile_public()["visibility"] == "public"
+    assert client.set_profile_private()["visibility"] == "private"
+    assert client.upload_avatar("avatar.png")["image_path"] == "avatar.png"
+
+    client.community.get_account_info = original_get_account_info
+    client.community.get_profile_edit_state = original_get_profile_edit_state
+    client.community.get_profile_privacy = original_get_profile_privacy
+    client.community.get_trade_offer_url = original_get_trade_offer_url
+    client.community.rotate_trade_offer_url = original_rotate_trade_offer_url
+    client.community.get_web_api_key_status = original_get_web_api_key_status
+    client.community.get_web_api_key_page_state = original_get_web_api_key_page_state
+    client.community.set_profile_privacy = original_set_profile_privacy
+    client.community.edit_profile = original_edit_profile
+    client.community.update_persona_name = original_update_persona_name
+    client.community.update_custom_url = original_update_custom_url
+    client.community.update_real_name = original_update_real_name
+    client.community.update_summary = original_update_summary
+    client.community.update_location = original_update_location
+    client.community.set_profile_public = original_set_profile_public
+    client.community.set_profile_private = original_set_profile_private
+    client.community.upload_avatar = original_upload_avatar
+    client.close()
+
+
 def test_community_credentials_build_cookie_from_access_token() -> None:
     credentials = CommunityCredentials(
         steam_id="76561197960435530",
@@ -2346,6 +2428,68 @@ def test_client_can_get_user_group_ids_for_user_from_profile_url() -> None:
     client.close()
 
 
+def test_client_can_get_friend_bans_for_user_with_limit() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "friendslist": {
+                        "friends": [
+                            {"steamid": "76561197960435530"},
+                            {"steamid": "76561197960287930"},
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "players": [
+                        {"SteamId": "76561197960435530", "VACBanned": False, "CommunityBanned": False},
+                    ]
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_friend_bans_for_user("76561197960434622", limit=1)
+
+    assert len(result) == 1
+    assert result[0]["steamid"] == "76561197960435530"
+    client.close()
+
+
+def test_client_can_get_friend_bans_map_for_user() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "friendslist": {
+                        "friends": [
+                            {"steamid": "76561197960435530"},
+                            {"steamid": "76561197960287930"},
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "players": [
+                        {"SteamId": "76561197960435530", "VACBanned": False, "CommunityBanned": False},
+                        {"SteamId": "76561197960287930", "VACBanned": True, "CommunityBanned": False},
+                    ]
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_friend_bans_map_for_user("76561197960434622")
+
+    assert result["76561197960287930"]["vac_banned"] is True
+    client.close()
+
+
 def test_client_can_get_friend_summaries_for_user_from_profile_url() -> None:
     session = SequenceSession(
         [
@@ -3322,4 +3466,37 @@ def test_create_group_can_skip_availability_checks() -> None:
     assert created.group_id == "1234"
     assert created.group_id64 == "76561198000000000"
     assert len(session.calls) == 2
+    client.close()
+
+
+def test_client_group_helpers_delegate_to_groups_service() -> None:
+    client = SteamClient()
+
+    original_fetch_group_id64 = client.groups.fetch_group_id64
+    original_fetch_group_id = client.groups.fetch_group_id
+    original_check_name_availability = client.groups.check_name_availability
+    original_check_url_availability = client.groups.check_url_availability
+    original_check_tag_availability = client.groups.check_tag_availability
+    original_create_group = client.groups.create_group
+
+    client.groups.fetch_group_id64 = lambda group_url: "103582791429521412"
+    client.groups.fetch_group_id = lambda group_url: "123456"
+    client.groups.check_name_availability = lambda name: {"kind": "name", "value": name}
+    client.groups.check_url_availability = lambda group_url: {"kind": "url", "value": group_url}
+    client.groups.check_tag_availability = lambda abbreviation: {"kind": "tag", "value": abbreviation}
+    client.groups.create_group = lambda **kwargs: {"kind": "create", "kwargs": kwargs}
+
+    assert client.get_group_id64("Valve") == "103582791429521412"
+    assert client.get_group_id("editable-group") == "123456"
+    assert client.check_group_name_availability("Example")["value"] == "Example"
+    assert client.check_group_url_availability("example-group")["kind"] == "url"
+    assert client.check_group_tag_availability("EX")["kind"] == "tag"
+    assert client.create_group(name="Example", abbreviation="EX", group_url="example")["kwargs"]["group_url"] == "example"
+
+    client.groups.fetch_group_id64 = original_fetch_group_id64
+    client.groups.fetch_group_id = original_fetch_group_id
+    client.groups.check_name_availability = original_check_name_availability
+    client.groups.check_url_availability = original_check_url_availability
+    client.groups.check_tag_availability = original_check_tag_availability
+    client.groups.create_group = original_create_group
     client.close()
