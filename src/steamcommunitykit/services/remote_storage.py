@@ -87,6 +87,26 @@ class RemoteStorageService:
             data=data,
         )
 
+    def get_published_file_details_summary(self, published_file_ids) -> dict:
+        payload = self.get_published_file_details(published_file_ids)
+        details = payload.get("publishedfiledetails", [])
+        items = [
+            self.normalize_published_file_detail(detail)
+            for detail in details
+            if int(detail.get("result", 0) or 0) == 1
+        ]
+        items_by_id = {
+            str(item["published_file_id"]): item
+            for item in items
+            if item.get("published_file_id")
+        }
+        return {
+            "items": items,
+            "item_ids": [item.get("published_file_id") for item in items if item.get("published_file_id")],
+            "items_by_id": items_by_id,
+            "raw": payload,
+        }
+
     def get_collection_details_summary(self, published_file_ids) -> dict:
         payload = self.get_collection_details(published_file_ids)
         details = payload.get("collectiondetails", [])
@@ -132,21 +152,15 @@ class RemoteStorageService:
         }
 
     def get_published_file_detail(self, published_file_id) -> dict:
-        detail = self.get_published_file_details([published_file_id]).get("publishedfiledetails", [])
-        if not detail:
+        detail_payload = self.get_published_file_details_summary([published_file_id])
+        details = detail_payload.get("items", [])
+        if not details:
             raise SteamNotFoundError(
                 "Steam did not return a published file detail for the requested id.",
                 status_code=404,
                 payload={"published_file_id": str(published_file_id)},
             )
-        first = detail[0]
-        if int(first.get("result", 0) or 0) != 1:
-            raise SteamNotFoundError(
-                "Steam did not return a valid published file detail for the requested id.",
-                status_code=404,
-                payload=first,
-            )
-        return self.normalize_published_file_detail(first)
+        return details[0]
 
     def get_ugc_file_details(self, ugc_id, app_id, steam_id=None) -> dict:
         params = {

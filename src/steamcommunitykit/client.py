@@ -231,6 +231,12 @@ class SteamClient:
     def get_published_file_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_published_file_detail(published_file_id)
 
+    def get_published_file_details(self, published_file_ids) -> dict:
+        return self.remote_storage.get_published_file_details_summary(published_file_ids)
+
+    def get_collection_details(self, published_file_ids) -> dict:
+        return self.remote_storage.get_collection_details_summary(published_file_ids)
+
     def get_collection_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_detail(published_file_id)
 
@@ -265,6 +271,103 @@ class SteamClient:
 
     def get_news_summary(self, app_id, **kwargs) -> dict:
         return self.news.get_news_summary(app_id, **kwargs)
+
+    def get_trade_offers_summary(self) -> dict:
+        return self.econ.get_trade_offers_summary()
+
+    def get_trade_offers(
+        self,
+        *,
+        get_sent_offers: bool = True,
+        get_received_offers: bool = True,
+        get_descriptions: bool = False,
+        language: str = "english",
+        active_only: bool = True,
+        historical_only: bool = False,
+        time_historical_cutoff: int = 0,
+    ) -> dict:
+        return self.econ.get_trade_offers(
+            get_sent_offers=get_sent_offers,
+            get_received_offers=get_received_offers,
+            get_descriptions=get_descriptions,
+            language=language,
+            active_only=active_only,
+            historical_only=historical_only,
+            time_historical_cutoff=time_historical_cutoff,
+        )
+
+    def get_trade_offer_totals(self, *, time_last_visit: Optional[int] = None) -> dict:
+        return self.econ.get_trade_offer_totals(time_last_visit=time_last_visit)
+
+    def get_trade_offers_summary_view(
+        self,
+        *,
+        get_sent_offers: bool = True,
+        get_received_offers: bool = True,
+        get_descriptions: bool = False,
+        language: str = "english",
+        active_only: bool = True,
+        historical_only: bool = False,
+        time_historical_cutoff: int = 0,
+    ) -> dict:
+        return self.econ.get_trade_offers_summary_view(
+            get_sent_offers=get_sent_offers,
+            get_received_offers=get_received_offers,
+            get_descriptions=get_descriptions,
+            language=language,
+            active_only=active_only,
+            historical_only=historical_only,
+            time_historical_cutoff=time_historical_cutoff,
+        )
+
+    def get_trade_history_summary(
+        self,
+        *,
+        max_trades: int = 100,
+        start_after_time: int = 0,
+        start_after_trade_id=1,
+        navigating_back: bool = False,
+        get_descriptions: bool = False,
+        language: str = "english",
+        include_failed: bool = True,
+        include_total: bool = True,
+    ) -> dict:
+        return self.econ.get_trade_history_summary(
+            max_trades=max_trades,
+            start_after_time=start_after_time,
+            start_after_trade_id=start_after_trade_id,
+            navigating_back=navigating_back,
+            get_descriptions=get_descriptions,
+            language=language,
+            include_failed=include_failed,
+            include_total=include_total,
+        )
+
+    def get_trade_offer_summary(self, trade_offer_id, *, language: str = "english") -> dict:
+        return self.econ.get_trade_offer_summary(trade_offer_id, language=language)
+
+    def get_trade_history(
+        self,
+        *,
+        max_trades: int = 100,
+        start_after_time: int = 0,
+        start_after_trade_id=1,
+        navigating_back: bool = False,
+        get_descriptions: bool = False,
+        language: str = "english",
+        include_failed: bool = True,
+        include_total: bool = True,
+    ) -> dict:
+        return self.econ.get_trade_history(
+            max_trades=max_trades,
+            start_after_time=start_after_time,
+            start_after_trade_id=start_after_trade_id,
+            navigating_back=navigating_back,
+            get_descriptions=get_descriptions,
+            language=language,
+            include_failed=include_failed,
+            include_total=include_total,
+        )
 
     def get_app_details_many(
         self,
@@ -424,6 +527,67 @@ class SteamClient:
             sort_column=sort_column,
             sort_dir=sort_dir,
         )
+
+    def get_market_price_overview(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        currency: int = 1,
+    ) -> dict:
+        return self.market.get_price_overview(
+            app_id,
+            market_hash_name,
+            currency=currency,
+        )
+
+    def get_market_item_name_id(self, app_id, market_hash_name: str) -> int:
+        return self.market.get_item_name_id(app_id, market_hash_name)
+
+    def get_market_item_orders_histogram(
+        self,
+        *,
+        item_name_id=None,
+        app_id=None,
+        market_hash_name: Optional[str] = None,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        two_factor: int = 0,
+    ) -> dict:
+        return self.market.get_item_orders_histogram(
+            item_name_id=item_name_id,
+            app_id=app_id,
+            market_hash_name=market_hash_name,
+            country=country,
+            language=language,
+            currency=currency,
+            two_factor=two_factor,
+        )
+
+    def get_market_item_orders_summary(
+        self,
+        *,
+        item_name_id=None,
+        app_id=None,
+        market_hash_name: Optional[str] = None,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        two_factor: int = 0,
+    ) -> dict:
+        return self.market.get_item_orders_summary(
+            item_name_id=item_name_id,
+            app_id=app_id,
+            market_hash_name=market_hash_name,
+            country=country,
+            language=language,
+            currency=currency,
+            two_factor=two_factor,
+        )
+
+    def get_market_price_history(self, app_id, market_hash_name: str) -> dict:
+        return self.market.get_price_history(app_id, market_hash_name)
 
     def get_market_item_listings_summary(
         self,

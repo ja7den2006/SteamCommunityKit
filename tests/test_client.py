@@ -893,6 +893,39 @@ def test_remote_storage_get_published_file_detail_normalizes_result() -> None:
     client.close()
 
 
+def test_remote_storage_get_published_file_details_summary_normalizes_and_maps_items() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "publishedfiledetails": [
+                        {
+                            "publishedfileid": "123",
+                            "result": 1,
+                            "title": "First Item",
+                            "consumer_appid": 570,
+                            "subscriptions": 12,
+                        },
+                        {
+                            "publishedfileid": "456",
+                            "result": 9,
+                            "title": "Invalid Item",
+                        },
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_published_file_details(["123", "456"])
+
+    assert result["item_ids"] == ["123"]
+    assert result["items"][0]["title"] == "First Item"
+    assert result["items_by_id"]["123"]["subscriptions"] == 12
+    client.close()
+
+
 def test_remote_storage_get_published_file_detail_raises_for_invalid_result() -> None:
     session = RecordingSession(
         DummyResponse(
@@ -943,6 +976,35 @@ def test_remote_storage_get_collection_detail_normalizes_children() -> None:
     assert result["published_file_id"] == "2682416130"
     assert result["child_count"] == 2
     assert result["child_ids"] == ["111", "222"]
+    client.close()
+
+
+def test_client_get_collection_details_returns_normalized_bulk_summary() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "collectiondetails": [
+                        {
+                            "publishedfileid": "2682416130",
+                            "result": 1,
+                            "childcount": 2,
+                            "children": [
+                                {"publishedfileid": "111"},
+                                {"publishedfileid": "222"},
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_collection_details(["2682416130"])
+
+    assert result["collection_ids"] == ["2682416130"]
+    assert result["collections"][0]["child_ids"] == ["111", "222"]
     client.close()
 
 
@@ -1143,6 +1205,47 @@ def test_econ_get_trade_offers_summary_view_normalizes_offers() -> None:
     assert result["description_count"] == 1
     assert result["sent"][0]["items_to_give_count"] == 1
     assert result["sent"][0]["items_to_receive_count"] == 1
+    client.close()
+
+
+def test_client_trade_helpers_delegate_to_econ_service() -> None:
+    client = SteamClient(api_key="test")
+
+    original_get_trade_offers_summary = client.econ.get_trade_offers_summary
+    original_get_trade_offers = client.econ.get_trade_offers
+    original_get_trade_history = client.econ.get_trade_history
+    original_get_trade_offer_totals = client.econ.get_trade_offer_totals
+    original_get_trade_offers_summary_view = client.econ.get_trade_offers_summary_view
+    original_get_trade_history_summary = client.econ.get_trade_history_summary
+    original_get_trade_offer_summary = client.econ.get_trade_offer_summary
+
+    client.econ.get_trade_offers_summary = lambda: {"kind": "summary"}
+    client.econ.get_trade_offers = lambda **kwargs: {"kind": "offers", "kwargs": kwargs}
+    client.econ.get_trade_history = lambda **kwargs: {"kind": "history", "kwargs": kwargs}
+    client.econ.get_trade_offer_totals = lambda **kwargs: {"kind": "totals", "kwargs": kwargs}
+    client.econ.get_trade_offers_summary_view = lambda **kwargs: {"kind": "summary_view", "kwargs": kwargs}
+    client.econ.get_trade_history_summary = lambda **kwargs: {"kind": "history_summary", "kwargs": kwargs}
+    client.econ.get_trade_offer_summary = lambda trade_offer_id, **kwargs: {
+        "kind": "offer_summary",
+        "trade_offer_id": trade_offer_id,
+        "kwargs": kwargs,
+    }
+
+    assert client.get_trade_offers_summary() == {"kind": "summary"}
+    assert client.get_trade_offers(get_received_offers=False)["kwargs"]["get_received_offers"] is False
+    assert client.get_trade_history(max_trades=5)["kwargs"]["max_trades"] == 5
+    assert client.get_trade_offer_totals(time_last_visit=12)["kwargs"]["time_last_visit"] == 12
+    assert client.get_trade_offers_summary_view(active_only=False)["kwargs"]["active_only"] is False
+    assert client.get_trade_history_summary(max_trades=2)["kwargs"]["max_trades"] == 2
+    assert client.get_trade_offer_summary("42")["trade_offer_id"] == "42"
+
+    client.econ.get_trade_offers_summary = original_get_trade_offers_summary
+    client.econ.get_trade_offers = original_get_trade_offers
+    client.econ.get_trade_history = original_get_trade_history
+    client.econ.get_trade_offer_totals = original_get_trade_offer_totals
+    client.econ.get_trade_offers_summary_view = original_get_trade_offers_summary_view
+    client.econ.get_trade_history_summary = original_get_trade_history_summary
+    client.econ.get_trade_offer_summary = original_get_trade_offer_summary
     client.close()
 
 
@@ -2146,6 +2249,44 @@ def test_client_search_market_items_uses_market_summary_helper() -> None:
     result = client.search_market_items(query="AK-47", app_id=730)
 
     assert result["items"][0]["hash_name"] == "AK-47 | Example"
+    client.close()
+
+
+def test_client_market_convenience_helpers_delegate_to_market_service() -> None:
+    client = SteamClient()
+
+    original_get_price_overview = client.market.get_price_overview
+    original_get_item_name_id = client.market.get_item_name_id
+    original_get_item_orders_histogram = client.market.get_item_orders_histogram
+    original_get_item_orders_summary = client.market.get_item_orders_summary
+    original_get_price_history = client.market.get_price_history
+
+    client.market.get_price_overview = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "overview",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+    client.market.get_item_name_id = lambda app_id, market_hash_name: 7178002
+    client.market.get_item_orders_histogram = lambda **kwargs: {"kind": "histogram", "kwargs": kwargs}
+    client.market.get_item_orders_summary = lambda **kwargs: {"kind": "summary", "kwargs": kwargs}
+    client.market.get_price_history = lambda app_id, market_hash_name: {
+        "kind": "history",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+    }
+
+    assert client.get_market_price_overview(730, "AK-47 | Example")["kind"] == "overview"
+    assert client.get_market_item_name_id(730, "AK-47 | Example") == 7178002
+    assert client.get_market_item_orders_histogram(app_id=730, market_hash_name="AK-47 | Example")["kind"] == "histogram"
+    assert client.get_market_item_orders_summary(app_id=730, market_hash_name="AK-47 | Example")["kind"] == "summary"
+    assert client.get_market_price_history(730, "AK-47 | Example")["kind"] == "history"
+
+    client.market.get_price_overview = original_get_price_overview
+    client.market.get_item_name_id = original_get_item_name_id
+    client.market.get_item_orders_histogram = original_get_item_orders_histogram
+    client.market.get_item_orders_summary = original_get_item_orders_summary
+    client.market.get_price_history = original_get_price_history
     client.close()
 
 

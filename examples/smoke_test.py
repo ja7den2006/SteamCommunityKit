@@ -275,17 +275,17 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Trade Offers Summary",
         lambda: "pending_received={0}".format(
-            client.econ.get_trade_offers_summary().get("pending_received_count", 0)
+            client.get_trade_offers_summary().get("pending_received_count", 0)
         ),
     )
     run_check(
         "Get Trade Offer Totals",
-        lambda: _format_trade_offer_totals(client.econ.get_trade_offer_totals()),
+        lambda: _format_trade_offer_totals(client.get_trade_offer_totals()),
     )
     run_check(
         "Get Trade Offers",
         lambda: _format_trade_offers(
-            client.econ.get_trade_offers(
+            client.get_trade_offers(
                 get_sent_offers=True,
                 get_received_offers=True,
                 get_descriptions=False,
@@ -298,12 +298,12 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Trade Offers Summary View",
-        lambda: _format_trade_offers_summary_view(client.econ.get_trade_offers_summary_view()),
+        lambda: _format_trade_offers_summary_view(client.get_trade_offers_summary_view()),
     )
     run_check(
         "Get Trade History",
         lambda: _format_trade_history(
-            client.econ.get_trade_history(
+            client.get_trade_history(
                 max_trades=10,
                 start_after_time=0,
                 start_after_trade_id="1",
@@ -317,7 +317,7 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Trade History Summary",
-        lambda: _format_trade_history_summary(client.econ.get_trade_history_summary(max_trades=10)),
+        lambda: _format_trade_history_summary(client.get_trade_history_summary(max_trades=10)),
     )
     run_check(
         "Get Store App List",
@@ -369,10 +369,16 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
-        "Get Collection Details",
-        lambda: "collections={0}".format(
-            len(client.remote_storage.get_collection_details([args.collection_published_file_id]).get("collectiondetails", []))
+        "Get Published File Details Batch",
+        lambda: _format_published_file_details_batch(
+            client.get_published_file_details(
+                [_require_workshop_item_id(workshop_cache, args), args.collection_published_file_id]
+            )
         ),
+    )
+    run_check(
+        "Get Collection Details",
+        lambda: _format_collection_details(client.get_collection_details([args.collection_published_file_id])),
     )
     run_check(
         "Get Collection Detail",
@@ -474,7 +480,7 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Market Price Overview",
-        lambda: str(client.market.get_price_overview(args.market_app_id, args.market_hash_name)),
+        lambda: str(client.get_market_price_overview(args.market_app_id, args.market_hash_name)),
     )
     run_check(
         "Market Search",
@@ -493,18 +499,18 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Market Item Name ID",
-        lambda: str(client.market.get_item_name_id(args.market_app_id, args.market_hash_name)),
+        lambda: str(client.get_market_item_name_id(args.market_app_id, args.market_hash_name)),
     )
     run_check(
         "Market Price History",
         lambda: "points={0}".format(
-            len(client.market.get_price_history(args.market_app_id, args.market_hash_name).get("prices", []))
+            len(client.get_market_price_history(args.market_app_id, args.market_hash_name).get("prices", []))
         ),
     )
     run_check(
         "Market Orders Histogram",
         lambda: "success={0}".format(
-            client.market.get_item_orders_histogram(
+            client.get_market_item_orders_histogram(
                 app_id=args.market_app_id,
                 market_hash_name=args.market_hash_name,
             ).get("success")
@@ -513,7 +519,7 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Market Orders Summary",
         lambda: _format_market_orders_summary(
-            client.market.get_item_orders_summary(
+            client.get_market_item_orders_summary(
                 app_id=args.market_app_id,
                 market_hash_name=args.market_hash_name,
             )
@@ -1003,6 +1009,25 @@ def _format_published_file_detail(payload: dict) -> str:
         payload.get("title", ""),
         payload.get("app_name") or payload.get("app_id"),
         payload.get("subscriptions"),
+    )
+
+
+def _format_published_file_details_batch(payload: dict) -> str:
+    items = payload.get("items", [])
+    first_title = items[0].get("title", "") if items else "<none>"
+    first_title = _safe_console_text(first_title)
+    return "items={0} first={1}".format(
+        len(items),
+        first_title,
+    )
+
+
+def _format_collection_details(payload: dict) -> str:
+    collections = payload.get("collections", [])
+    first_id = collections[0].get("published_file_id") if collections else "<none>"
+    return "collections={0} first={1}".format(
+        len(collections),
+        first_id,
     )
 
 
