@@ -586,6 +586,26 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def get_inventory_item_counts_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_inventory_item_counts(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
     def find_inventory_items_for_user(
         self,
         identifier,
@@ -695,6 +715,25 @@ class SteamClient:
 
     def get_market_price_history(self, app_id, market_hash_name: str) -> dict:
         return self.market.get_price_history(app_id, market_hash_name)
+
+    def get_market_price_snapshot(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        currency: int = 1,
+        country: str = "US",
+        language: str = "english",
+        listings_count: int = 10,
+    ) -> dict:
+        return self.market.get_market_price_snapshot(
+            app_id,
+            market_hash_name,
+            currency=currency,
+            country=country,
+            language=language,
+            listings_count=listings_count,
+        )
 
     def get_market_item_listings_summary(
         self,
@@ -851,6 +890,28 @@ class SteamClient:
         url_type=None,
     ) -> dict:
         return self.inventory.get_full_inventory_items_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def get_full_inventory_item_counts_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_full_inventory_item_counts(
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,

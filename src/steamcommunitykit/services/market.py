@@ -522,3 +522,49 @@ class MarketService:
             "price_suffix": suffix_match.group(1) if suffix_match else "",
             "prices": prices,
         }
+
+    def get_market_price_snapshot(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        currency: int = 1,
+        country: str = "US",
+        language: str = "english",
+        listings_count: int = 10,
+    ) -> dict:
+        item_name_id = self.get_item_name_id(app_id, market_hash_name)
+        price_overview = self.get_price_overview(app_id, market_hash_name, currency=currency)
+        orders = self.get_item_orders_summary(
+            item_name_id=item_name_id,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        listings = self.get_item_listings_summary(
+            app_id,
+            market_hash_name,
+            count=listings_count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        cheapest_listing = listings.get("cheapest_listing") or {}
+        return {
+            "app_id": validate_app_id(app_id),
+            "market_hash_name": ensure_not_blank(market_hash_name, "market_hash_name"),
+            "item_name_id": item_name_id,
+            "lowest_price_text": price_overview.get("lowest_price"),
+            "median_price_text": price_overview.get("median_price"),
+            "volume_text": price_overview.get("volume"),
+            "highest_buy_order": orders.get("highest_buy_order"),
+            "lowest_sell_order": orders.get("lowest_sell_order"),
+            "buy_order_count": orders.get("buy_order_count"),
+            "sell_order_count": orders.get("sell_order_count"),
+            "listing_count": listings.get("total_count"),
+            "cheapest_listing_price": cheapest_listing.get("converted_price") or cheapest_listing.get("price"),
+            "cheapest_listing_fee": cheapest_listing.get("converted_fee") or cheapest_listing.get("fee"),
+            "price_overview": price_overview,
+            "orders": orders,
+            "listings": listings,
+        }

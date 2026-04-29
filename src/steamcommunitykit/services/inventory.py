@@ -77,6 +77,55 @@ class InventoryService:
             "sessionid": credentials.session_id,
         }
 
+    @staticmethod
+    def _coerce_amount(value) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _build_item_counts(self, items: List[dict]) -> dict:
+        counts = {}
+        for item in items:
+            key = item.get("market_hash_name") or item.get("name") or str(item.get("asset_id") or "")
+            if not key:
+                continue
+            entry = counts.setdefault(
+                key,
+                {
+                    "market_hash_name": item.get("market_hash_name") or "",
+                    "name": item.get("name") or "",
+                    "count": 0,
+                    "asset_count": 0,
+                    "tradable_count": 0,
+                    "marketable_count": 0,
+                    "items": [],
+                },
+            )
+            amount = self._coerce_amount(item.get("amount"))
+            entry["count"] += amount if amount > 0 else 1
+            entry["asset_count"] += 1
+            if item.get("tradable"):
+                entry["tradable_count"] += 1
+            if item.get("marketable"):
+                entry["marketable_count"] += 1
+            entry["items"].append(item)
+
+        entries = sorted(
+            counts.values(),
+            key=lambda item: (-item.get("count", 0), item.get("market_hash_name") or item.get("name") or ""),
+        )
+        entries_map = {
+            (entry.get("market_hash_name") or entry.get("name") or ""): entry
+            for entry in entries
+            if entry.get("market_hash_name") or entry.get("name")
+        }
+        return {
+            "entries": entries,
+            "entries_map": entries_map,
+            "unique_item_count": len(entries),
+        }
+
     def get_inventory(
         self,
         steam_id,
@@ -364,6 +413,36 @@ class InventoryService:
             "raw": payload,
         }
 
+    def get_inventory_item_counts(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        payload = self.get_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+        counts = self._build_item_counts(payload.get("items", []))
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "total_inventory_count": payload.get("total_inventory_count"),
+            "unique_item_count": counts.get("unique_item_count", 0),
+            "items": counts.get("entries", []),
+            "items_map": counts.get("entries_map", {}),
+            "raw": payload,
+        }
+
     def get_full_inventory_items_summary(
         self,
         steam_id,
@@ -452,5 +531,38 @@ class InventoryService:
             "pages_fetched": payload.get("pages_fetched", 0),
             "count": len(matches),
             "items": matches,
+            "raw": payload,
+        }
+
+    def get_full_inventory_item_counts(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        payload = self.get_full_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+        counts = self._build_item_counts(payload.get("items", []))
+        return {
+            "steamid": payload.get("steamid"),
+            "app_id": payload.get("app_id"),
+            "context_id": payload.get("context_id"),
+            "total_inventory_count": payload.get("total_inventory_count"),
+            "pages_fetched": payload.get("pages_fetched", 0),
+            "unique_item_count": counts.get("unique_item_count", 0),
+            "items": counts.get("entries", []),
+            "items_map": counts.get("entries_map", {}),
             "raw": payload,
         }

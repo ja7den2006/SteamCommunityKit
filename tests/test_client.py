@@ -1747,6 +1747,32 @@ def test_inventory_items_summary_normalizes_items_and_maps_asset_ids() -> None:
     client.close()
 
 
+def test_inventory_item_counts_aggregates_by_market_hash_name() -> None:
+    payload = {
+        "assets": [
+            {"assetid": "1", "classid": "10", "instanceid": "0", "amount": "2", "appid": 730, "contextid": "2"},
+            {"assetid": "2", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"},
+            {"assetid": "3", "classid": "11", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"},
+        ],
+        "descriptions": [
+            {"classid": "10", "instanceid": "0", "market_hash_name": "AK-47 | Example", "name": "AK-47 | Example", "tradable": 1, "marketable": 1},
+            {"classid": "11", "instanceid": "0", "market_hash_name": "M4A4 | Example", "name": "M4A4 | Example", "tradable": 0, "marketable": 1},
+        ],
+        "total_inventory_count": 3,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    result = client.get_inventory_item_counts_for_user("76561197960435530", 730, 2)
+
+    assert result["unique_item_count"] == 2
+    assert result["items"][0]["market_hash_name"] == "AK-47 | Example"
+    assert result["items"][0]["count"] == 3
+    assert result["items_map"]["AK-47 | Example"]["asset_count"] == 2
+    client.close()
+
+
 def test_inventory_find_items_filters_by_name_and_flags() -> None:
     payload = {
         "assets": [
@@ -1805,6 +1831,44 @@ def test_inventory_full_items_summary_normalizes_paginated_inventory() -> None:
     assert result["pages_fetched"] == 2
     assert len(result["items"]) == 2
     assert result["items_by_asset_id"]["2"]["market_hash_name"] == "Two"
+    client.close()
+
+
+def test_full_inventory_item_counts_aggregate_across_pages() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "AK-47 | One", "name": "AK-47 | One", "tradable": 1, "marketable": 1}],
+                    "total_inventory_count": 3,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [
+                        {"assetid": "2", "classid": "10", "instanceid": "0", "amount": "2", "appid": 730, "contextid": "2"},
+                        {"assetid": "3", "classid": "11", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"},
+                    ],
+                    "descriptions": [
+                        {"classid": "10", "instanceid": "0", "market_hash_name": "AK-47 | One", "name": "AK-47 | One", "tradable": 1, "marketable": 1},
+                        {"classid": "11", "instanceid": "0", "market_hash_name": "M4A4 | Two", "name": "M4A4 | Two", "tradable": 0, "marketable": 1},
+                    ],
+                    "total_inventory_count": 3,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_full_inventory_item_counts_for_user("76561197960435530", 730, 2, max_pages=2)
+
+    assert result["pages_fetched"] == 2
+    assert result["unique_item_count"] == 2
+    assert result["items_map"]["AK-47 | One"]["count"] == 3
     client.close()
 
 
@@ -2305,6 +2369,45 @@ def test_market_get_price_history_parses_listings_page_html() -> None:
     assert result["price_suffix"] == ""
     assert len(result["prices"]) == 2
     assert result["prices"][0][0] == "Feb 21 2014 01: +0"
+    client.close()
+
+
+def test_market_price_snapshot_combines_price_orders_and_listings() -> None:
+    client = SteamClient()
+
+    original_get_item_name_id = client.market.get_item_name_id
+    original_get_price_overview = client.market.get_price_overview
+    original_get_item_orders_summary = client.market.get_item_orders_summary
+    original_get_item_listings_summary = client.market.get_item_listings_summary
+
+    client.market.get_item_name_id = lambda app_id, market_hash_name: 7178002
+    client.market.get_price_overview = lambda app_id, market_hash_name, **kwargs: {
+        "lowest_price": "$1.23",
+        "median_price": "$1.25",
+        "volume": "12",
+    }
+    client.market.get_item_orders_summary = lambda **kwargs: {
+        "highest_buy_order": "123",
+        "lowest_sell_order": "125",
+        "buy_order_count": "10",
+        "sell_order_count": "20",
+    }
+    client.market.get_item_listings_summary = lambda app_id, market_hash_name, **kwargs: {
+        "total_count": 5,
+        "cheapest_listing": {"price": 123, "fee": 10},
+    }
+
+    result = client.get_market_price_snapshot(730, "AK-47 | Example")
+
+    assert result["item_name_id"] == 7178002
+    assert result["lowest_price_text"] == "$1.23"
+    assert result["listing_count"] == 5
+    assert result["cheapest_listing_price"] == 123
+
+    client.market.get_item_name_id = original_get_item_name_id
+    client.market.get_price_overview = original_get_price_overview
+    client.market.get_item_orders_summary = original_get_item_orders_summary
+    client.market.get_item_listings_summary = original_get_item_listings_summary
     client.close()
 
 

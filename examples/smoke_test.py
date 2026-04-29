@@ -526,6 +526,16 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Price Snapshot",
+        lambda: _format_market_price_snapshot(
+            client.get_market_price_snapshot(
+                args.market_app_id,
+                args.market_hash_name,
+                listings_count=10,
+            )
+        ),
+    )
+    run_check(
         "Market Listings Summary",
         lambda: _format_market_listings_summary(
             client.get_market_item_listings_summary(
@@ -672,6 +682,17 @@ def run_community_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Own Inventory Item Counts",
+        lambda: _format_inventory_counts(
+            client.get_inventory_item_counts_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+            )
+        ),
+    )
+    run_check(
         "Find Own Inventory Items",
         lambda: _format_inventory_find(
             client.find_inventory_items_for_user(
@@ -687,6 +708,18 @@ def run_community_suite(client: SteamClient, args) -> None:
         "Get Own Full Inventory Summary",
         lambda: _format_inventory_items(
             client.get_full_inventory_items_summary_for_user(
+                _require_cached(cache, "account_info").get("steamid"),
+                args.inventory_app_id,
+                args.inventory_context_id,
+                count=args.inventory_count,
+                max_pages=2,
+            )
+        ),
+    )
+    run_check(
+        "Get Own Full Inventory Item Counts",
+        lambda: _format_inventory_counts(
+            client.get_full_inventory_item_counts_for_user(
                 _require_cached(cache, "account_info").get("steamid"),
                 args.inventory_app_id,
                 args.inventory_context_id,
@@ -941,6 +974,15 @@ def _format_market_orders_summary(payload: dict) -> str:
     )
 
 
+def _format_market_price_snapshot(payload: dict) -> str:
+    return "lowest={0} median={1} listings={2} cheapest={3}".format(
+        payload.get("lowest_price_text"),
+        payload.get("median_price_text"),
+        payload.get("listing_count"),
+        payload.get("cheapest_listing_price"),
+    )
+
+
 def _format_market_listings_summary(payload: dict) -> str:
     cheapest = payload.get("cheapest_listing") or {}
     cheapest_price = cheapest.get("converted_price") or cheapest.get("price")
@@ -997,6 +1039,17 @@ def _format_inventory_find(payload: dict) -> str:
     first_name = items[0].get("market_hash_name") or items[0].get("name") if items else "<none>"
     first_name = _safe_console_text(first_name)
     return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
+def _format_inventory_counts(payload: dict) -> str:
+    items = payload.get("items", [])
+    first = items[0] if items else {}
+    first_name = _safe_console_text(first.get("market_hash_name") or first.get("name") or "<none>")
+    return "unique={0} first={1} count={2}".format(
+        payload.get("unique_item_count", 0),
+        first_name,
+        first.get("count", 0),
+    )
 
 
 def _capture_workshop_query_summary(cache: dict, payload: dict) -> str:
