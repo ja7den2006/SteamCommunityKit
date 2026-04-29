@@ -2372,6 +2372,74 @@ def test_client_market_convenience_helpers_delegate_to_market_service() -> None:
     client.close()
 
 
+def test_client_public_app_stats_and_webapi_helpers_delegate_to_services() -> None:
+    client = SteamClient(api_key="test")
+
+    original_get_servers_at_address = client.apps.get_servers_at_address
+    original_up_to_date_check = client.apps.up_to_date_check
+    original_get_news_for_app = client.news.get_news_for_app
+    original_get_news_for_app_authed = client.news.get_news_for_app_authed
+    original_get_number_of_current_players = client.user_stats.get_number_of_current_players
+    original_get_global_achievement_percentages_for_app = client.user_stats.get_global_achievement_percentages_for_app
+    original_get_schema_for_game = client.user_stats.get_schema_for_game
+    original_get_global_stats_for_game = client.user_stats.get_global_stats_for_game
+    original_get_player_achievements = client.user_stats.get_player_achievements
+    original_get_user_stats_for_game = client.user_stats.get_user_stats_for_game
+    original_get_server_info = client.webapi_util.get_server_info
+    original_get_supported_api_list = client.webapi_util.get_supported_api_list
+
+    client.apps.get_servers_at_address = lambda address: {"address": address}
+    client.apps.up_to_date_check = lambda app_id, version: {"app_id": app_id, "version": version}
+    client.news.get_news_for_app = lambda app_id, **kwargs: {"app_id": app_id, "kwargs": kwargs}
+    client.news.get_news_for_app_authed = lambda app_id, **kwargs: {"app_id": app_id, "kwargs": kwargs}
+    client.user_stats.get_number_of_current_players = lambda app_id: {"app_id": app_id, "player_count": 123}
+    client.user_stats.get_global_achievement_percentages_for_app = lambda app_id: {"app_id": app_id}
+    client.user_stats.get_schema_for_game = lambda app_id, **kwargs: {"app_id": app_id, "kwargs": kwargs}
+    client.user_stats.get_global_stats_for_game = lambda app_id, names, **kwargs: {
+        "app_id": app_id,
+        "names": names,
+        "kwargs": kwargs,
+    }
+    client.user_stats.get_player_achievements = lambda steam_id, app_id, **kwargs: {
+        "steam_id": steam_id,
+        "app_id": app_id,
+        "kwargs": kwargs,
+    }
+    client.user_stats.get_user_stats_for_game = lambda steam_id, app_id: {
+        "steam_id": steam_id,
+        "app_id": app_id,
+    }
+    client.webapi_util.get_server_info = lambda: {"servertime": 1}
+    client.webapi_util.get_supported_api_list = lambda **kwargs: {"kwargs": kwargs}
+
+    assert client.get_servers_at_address("1.2.3.4")["address"] == "1.2.3.4"
+    assert client.up_to_date_check(570, 0)["app_id"] == 570
+    assert client.get_news_for_app(570, count=1)["kwargs"]["count"] == 1
+    assert client.get_news_for_app_authed(570, count=1)["kwargs"]["count"] == 1
+    assert client.get_number_of_current_players(570)["player_count"] == 123
+    assert client.get_global_achievement_percentages_for_app(570)["app_id"] == 570
+    assert client.get_schema_for_game(570, language="english")["kwargs"]["language"] == "english"
+    assert client.get_global_stats_for_game(570, ["total_kills"])["names"] == ["total_kills"]
+    assert client.get_player_achievements_for_user("76561197960435530", 570)["steam_id"] == "76561197960435530"
+    assert client.get_user_stats_for_game_for_user("76561197960435530", 570)["app_id"] == 570
+    assert client.get_web_api_server_info()["servertime"] == 1
+    assert client.get_supported_api_list(include_restricted=True)["kwargs"]["include_restricted"] is True
+
+    client.apps.get_servers_at_address = original_get_servers_at_address
+    client.apps.up_to_date_check = original_up_to_date_check
+    client.news.get_news_for_app = original_get_news_for_app
+    client.news.get_news_for_app_authed = original_get_news_for_app_authed
+    client.user_stats.get_number_of_current_players = original_get_number_of_current_players
+    client.user_stats.get_global_achievement_percentages_for_app = original_get_global_achievement_percentages_for_app
+    client.user_stats.get_schema_for_game = original_get_schema_for_game
+    client.user_stats.get_global_stats_for_game = original_get_global_stats_for_game
+    client.user_stats.get_player_achievements = original_get_player_achievements
+    client.user_stats.get_user_stats_for_game = original_get_user_stats_for_game
+    client.webapi_util.get_server_info = original_get_server_info
+    client.webapi_util.get_supported_api_list = original_get_supported_api_list
+    client.close()
+
+
 def test_client_can_get_friend_list_for_user_from_profile_url() -> None:
     session = RecordingSession(
         DummyResponse(json_data={"friendslist": {"friends": [{"steamid": "76561197960435530"}]}})

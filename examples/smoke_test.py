@@ -199,12 +199,12 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Servers At Address",
         lambda: "servers={0}".format(
-            len(client.apps.get_servers_at_address("208.64.200.0").get("response", {}).get("servers", []))
+            len(client.get_servers_at_address("208.64.200.0").get("response", {}).get("servers", []))
         ),
     )
     run_check(
         "Up To Date Check",
-        lambda: str(client.apps.up_to_date_check(args.app_id, 0).get("up_to_date")),
+        lambda: str(client.up_to_date_check(args.app_id, 0).get("up_to_date")),
     )
     run_check(
         "Get App Details",
@@ -217,7 +217,7 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get News For App",
         lambda: "newsitems={0}".format(
-            len(client.news.get_news_for_app(args.app_id, count=1).get("appnews", {}).get("newsitems", []))
+            len(client.get_news_for_app(args.app_id, count=1).get("appnews", {}).get("newsitems", []))
         ),
     )
     run_check(
@@ -226,13 +226,13 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Number Of Current Players",
-        lambda: str(client.user_stats.get_number_of_current_players(args.app_id).get("player_count", 0)),
+        lambda: str(client.get_number_of_current_players(args.app_id).get("player_count", 0)),
     )
     run_check(
         "Get Global Achievement Percentages",
         lambda: "achievements={0}".format(
             len(
-                client.user_stats.get_global_achievement_percentages_for_app(args.app_id).get(
+                client.get_global_achievement_percentages_for_app(args.app_id).get(
                     "achievementpercentages", {}
                 ).get("achievements", [])
             )
@@ -245,7 +245,7 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Schema For Game",
         lambda: "gameName={0}".format(
-            client.user_stats.get_schema_for_game(args.app_id).get("game", {}).get("gameName", "<unknown>")
+            client.get_schema_for_game(args.app_id).get("game", {}).get("gameName", "<unknown>")
         ),
     )
     run_check(
@@ -256,7 +256,7 @@ def run_public_suite(client: SteamClient, args) -> None:
         "Get Global Stats For Game",
         lambda: "globalstats_keys={0}".format(
             sorted(
-                client.user_stats.get_global_stats_for_game(
+                client.get_global_stats_for_game(
                     args.app_id,
                     ["total_kills"],
                 ).keys()
@@ -390,12 +390,12 @@ def run_public_suite(client: SteamClient, args) -> None:
     )
     run_check(
         "Get Web API Server Info",
-        lambda: str(client.webapi_util.get_server_info()),
+        lambda: str(client.get_web_api_server_info()),
     )
     run_check(
         "Get Supported API List",
         lambda: "interfaces={0}".format(
-            len(client.webapi_util.get_supported_api_list().get("apilist", {}).get("interfaces", []))
+            len(client.get_supported_api_list().get("apilist", {}).get("interfaces", []))
         ),
     )
 
@@ -413,7 +413,7 @@ def run_public_suite(client: SteamClient, args) -> None:
             "Get News For App Authed",
             lambda: "newsitems={0}".format(
                 len(
-                    client.news.get_news_for_app_authed(args.app_id, count=1).get(
+                    client.get_news_for_app_authed(args.app_id, count=1).get(
                         "appnews", {}
                     ).get("newsitems", [])
                 )
@@ -423,8 +423,8 @@ def run_public_suite(client: SteamClient, args) -> None:
             "Get Player Achievements",
             lambda: "playerstats_keys={0}".format(
                 sorted(
-                    client.user_stats.get_player_achievements(
-                        client.resolve_steam_id(args.profile_identifier),
+                    client.get_player_achievements_for_user(
+                        args.profile_identifier,
                         args.app_id,
                     ).keys()
                 )
@@ -443,8 +443,8 @@ def run_public_suite(client: SteamClient, args) -> None:
             "Get User Stats For Game",
             lambda: "playerstats_keys={0}".format(
                 sorted(
-                    client.user_stats.get_user_stats_for_game(
-                        client.resolve_steam_id(args.profile_identifier),
+                    client.get_user_stats_for_game_for_user(
+                        args.profile_identifier,
                         args.app_id,
                     ).keys()
                 )

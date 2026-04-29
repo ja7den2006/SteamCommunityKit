@@ -312,6 +312,12 @@ class SteamClient:
             filters=filters,
         )
 
+    def get_servers_at_address(self, address: str) -> dict:
+        return self.apps.get_servers_at_address(address)
+
+    def up_to_date_check(self, app_id, version: int) -> dict:
+        return self.apps.up_to_date_check(app_id, version)
+
     def search_store_apps(self, query: str, *, max_results: int = 25, case_sensitive: bool = False, **kwargs) -> dict:
         return self.store.search_apps(
             query,
@@ -322,6 +328,12 @@ class SteamClient:
 
     def get_news_summary(self, app_id, **kwargs) -> dict:
         return self.news.get_news_summary(app_id, **kwargs)
+
+    def get_news_for_app(self, app_id, **kwargs) -> dict:
+        return self.news.get_news_for_app(app_id, **kwargs)
+
+    def get_news_for_app_authed(self, app_id, **kwargs) -> dict:
+        return self.news.get_news_for_app_authed(app_id, **kwargs)
 
     def get_trade_offers_summary(self) -> dict:
         return self.econ.get_trade_offers_summary()
@@ -438,8 +450,31 @@ class SteamClient:
     def get_global_achievement_percentages_map(self, app_id) -> dict:
         return self.user_stats.get_global_achievement_percentages_map(app_id)
 
+    def get_number_of_current_players(self, app_id) -> dict:
+        return self.user_stats.get_number_of_current_players(app_id)
+
+    def get_global_achievement_percentages_for_app(self, app_id) -> dict:
+        return self.user_stats.get_global_achievement_percentages_for_app(app_id)
+
+    def get_player_achievements_for_user(
+        self,
+        identifier,
+        app_id,
+        *,
+        language: Optional[str] = None,
+        url_type=None,
+    ) -> dict:
+        return self.user_stats.get_player_achievements(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            language=language,
+        )
+
     def get_schema_for_game_summary(self, app_id, *, language: Optional[str] = None) -> dict:
         return self.user_stats.get_schema_for_game_summary(app_id, language=language)
+
+    def get_schema_for_game(self, app_id, *, language: Optional[str] = None) -> dict:
+        return self.user_stats.get_schema_for_game(app_id, language=language)
 
     def get_global_stats_for_game_summary(
         self,
@@ -450,6 +485,21 @@ class SteamClient:
         end_date: Optional[int] = None,
     ) -> dict:
         return self.user_stats.get_global_stats_for_game_summary(
+            app_id,
+            names,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    def get_global_stats_for_game(
+        self,
+        app_id,
+        names,
+        *,
+        start_date: Optional[int] = None,
+        end_date: Optional[int] = None,
+    ) -> dict:
+        return self.user_stats.get_global_stats_for_game(
             app_id,
             names,
             start_date=start_date,
@@ -468,6 +518,12 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             language=language,
+        )
+
+    def get_user_stats_for_game_for_user(self, identifier, app_id, url_type=None) -> dict:
+        return self.user_stats.get_user_stats_for_game(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
         )
 
     def get_inventory_for_user(
@@ -870,6 +926,12 @@ class SteamClient:
 
     def get_web_api_key_page_state(self) -> dict:
         return self.community.get_web_api_key_page_state()
+
+    def get_web_api_server_info(self) -> dict:
+        return self.webapi_util.get_server_info()
+
+    def get_supported_api_list(self, *, include_restricted: bool = False) -> dict:
+        return self.webapi_util.get_supported_api_list(include_restricted=include_restricted)
 
     def set_profile_privacy(self, steam_id=None, **kwargs) -> dict:
         return self.community.set_profile_privacy(steam_id, **kwargs)
