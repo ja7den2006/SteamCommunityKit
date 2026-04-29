@@ -181,8 +181,19 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
         )
 
+    def get_badges_summary_for_user(self, identifier, url_type=None) -> dict:
+        return self.players.get_badges_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+        )
+
     def get_community_badge_progress_for_user(self, identifier, badge_id: int, url_type=None) -> dict:
         return self.players.get_community_badge_progress(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            badge_id,
+        )
+
+    def get_community_badge_progress_summary_for_user(self, identifier, badge_id: int, url_type=None) -> dict:
+        return self.players.get_community_badge_progress_summary(
             self.resolve_steam_id(identifier, url_type=url_type),
             badge_id,
         )

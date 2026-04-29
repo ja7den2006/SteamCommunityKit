@@ -81,6 +81,60 @@ class PlayersService:
             require_api_key=True,
         )
 
+    def get_badges_summary(self, steam_id) -> dict:
+        payload = self.get_badges(steam_id)
+        badges = payload.get("badges", []) or []
+        normalized = []
+        for entry in badges:
+            normalized.append(
+                {
+                    "badge_id": entry.get("badgeid"),
+                    "level": entry.get("level"),
+                    "completion_time": entry.get("completion_time"),
+                    "xp": entry.get("xp"),
+                    "scarcity": entry.get("scarcity"),
+                    "border_color": entry.get("border_color"),
+                    "appid": entry.get("appid"),
+                    "communityitemid": entry.get("communityitemid"),
+                    "raw": entry,
+                }
+            )
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "player_level": payload.get("player_level"),
+            "player_xp": payload.get("player_xp"),
+            "player_xp_needed_to_level_up": payload.get("player_xp_needed_to_level_up"),
+            "player_xp_needed_current_level": payload.get("player_xp_needed_current_level"),
+            "badge_count": len(normalized),
+            "badges": normalized,
+            "raw": payload,
+        }
+
+    def get_community_badge_progress_summary(self, steam_id, badge_id: int) -> dict:
+        payload = self.get_community_badge_progress(steam_id, badge_id)
+        quests = payload.get("quests", []) or []
+        normalized = []
+        completed_count = 0
+        for entry in quests:
+            completed = bool(entry.get("completed"))
+            if completed:
+                completed_count += 1
+            normalized.append(
+                {
+                    "quest_id": entry.get("questid"),
+                    "completed": completed,
+                    "raw": entry,
+                }
+            )
+        return {
+            "steamid": validate_steam_id(steam_id),
+            "badge_id": int(badge_id),
+            "quest_count": len(normalized),
+            "completed_count": completed_count,
+            "quests": normalized,
+            "raw": payload,
+        }
+
     @staticmethod
     def _normalize_game_entry(game: dict) -> dict:
         return {

@@ -1034,6 +1034,36 @@ def test_econ_get_trade_history_uses_user_key_endpoint() -> None:
     client.close()
 
 
+def test_econ_get_trade_history_summary_normalizes_trades() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "trades": [
+                        {
+                            "tradeid": "123",
+                            "steamid_other": "76561197960435530",
+                            "assets_given": [{"appid": 730, "assetid": "10", "amount": "1"}],
+                            "assets_received": [{"appid": 730, "assetid": "11", "amount": "2"}],
+                        }
+                    ],
+                    "total_trades": 1,
+                    "more": False,
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.econ.get_trade_history_summary(max_trades=10)
+
+    assert result["trade_count"] == 1
+    assert result["trades"][0]["trade_id"] == "123"
+    assert result["trades"][0]["assets_given_count"] == 1
+    assert result["trades"][0]["assets_received_count"] == 1
+    client.close()
+
+
 def test_econ_get_trade_offers_uses_user_key_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"trade_offers_sent": []}}))
     client = SteamClient(api_key="test", session=session)
@@ -1059,6 +1089,60 @@ def test_econ_get_trade_offers_uses_user_key_endpoint() -> None:
     assert call["params"]["time_historical_cutoff"] == 0
     assert call["params"]["key"] == "test"
     assert not hasattr(client.econ, "flush_inventory_cache")
+    client.close()
+
+
+def test_econ_get_trade_offer_totals_normalizes_summary_counts() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "pending_received_count": 2,
+                    "new_received_count": 1,
+                    "historical_received_count": 5,
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.econ.get_trade_offer_totals()
+
+    assert result["pending_received_count"] == 2
+    assert result["new_received_count"] == 1
+    assert result["historical_received_count"] == 5
+    client.close()
+
+
+def test_econ_get_trade_offers_summary_view_normalizes_offers() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "trade_offers_sent": [
+                        {
+                            "tradeofferid": "1",
+                            "accountid_other": 2,
+                            "items_to_give": [{"appid": 730, "assetid": "10", "amount": "1"}],
+                            "items_to_receive": [{"appid": 730, "assetid": "11", "amount": "2"}],
+                        }
+                    ],
+                    "trade_offers_received": [],
+                    "descriptions": [{"appid": 730}],
+                    "next_cursor": 0,
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.econ.get_trade_offers_summary_view()
+
+    assert result["sent_count"] == 1
+    assert result["received_count"] == 0
+    assert result["description_count"] == 1
+    assert result["sent"][0]["items_to_give_count"] == 1
+    assert result["sent"][0]["items_to_receive_count"] == 1
     client.close()
 
 
@@ -1361,6 +1445,59 @@ def test_players_find_recently_played_game_filters_by_name() -> None:
 
     assert result["count"] == 1
     assert result["games"][0]["app_id"] == 730
+    client.close()
+
+
+def test_players_get_badges_summary_normalizes_badges() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "player_level": 10,
+                    "player_xp": 1000,
+                    "badges": [
+                        {
+                            "badgeid": 1,
+                            "level": 2,
+                            "appid": 570,
+                            "xp": 200,
+                        }
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_badges_summary_for_user("76561197960434622")
+
+    assert result["player_level"] == 10
+    assert result["badge_count"] == 1
+    assert result["badges"][0]["badge_id"] == 1
+    assert result["badges"][0]["appid"] == 570
+    client.close()
+
+
+def test_players_get_community_badge_progress_summary_counts_completed() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "quests": [
+                        {"questid": 1, "completed": True},
+                        {"questid": 2, "completed": False},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_community_badge_progress_summary_for_user("76561197960434622", 1)
+
+    assert result["quest_count"] == 2
+    assert result["completed_count"] == 1
+    assert result["quests"][0]["quest_id"] == 1
     client.close()
 
 

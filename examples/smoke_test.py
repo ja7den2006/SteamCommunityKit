@@ -181,9 +181,19 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: "badges={0}".format(len(client.get_badges_for_user(args.profile_identifier).get("badges", []))),
     )
     run_check(
+        "Get Badges Summary",
+        lambda: _format_badges_summary(client.get_badges_summary_for_user(args.profile_identifier)),
+    )
+    run_check(
         "Get Community Badge Progress",
         lambda: "quests={0}".format(
             len(client.get_community_badge_progress_for_user(args.profile_identifier, 1).get("quests", []))
+        ),
+    )
+    run_check(
+        "Get Community Badge Progress Summary",
+        lambda: _format_badge_progress_summary(
+            client.get_community_badge_progress_summary_for_user(args.profile_identifier, 1)
         ),
     )
     run_check(
@@ -269,6 +279,10 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Trade Offer Totals",
+        lambda: _format_trade_offer_totals(client.econ.get_trade_offer_totals()),
+    )
+    run_check(
         "Get Trade Offers",
         lambda: _format_trade_offers(
             client.econ.get_trade_offers(
@@ -281,6 +295,10 @@ def run_public_suite(client: SteamClient, args) -> None:
                 time_historical_cutoff=0,
             )
         ),
+    )
+    run_check(
+        "Get Trade Offers Summary View",
+        lambda: _format_trade_offers_summary_view(client.econ.get_trade_offers_summary_view()),
     )
     run_check(
         "Get Trade History",
@@ -296,6 +314,10 @@ def run_public_suite(client: SteamClient, args) -> None:
                 include_total=True,
             )
         ),
+    )
+    run_check(
+        "Get Trade History Summary",
+        lambda: _format_trade_history_summary(client.econ.get_trade_history_summary(max_trades=10)),
     )
     run_check(
         "Get Store App List",
@@ -765,6 +787,34 @@ def _format_trade_history(payload: dict) -> str:
     )
 
 
+def _format_trade_offer_totals(payload: dict) -> str:
+    return "pending_received={0} new_received={1} historical_received={2}".format(
+        payload.get("pending_received_count"),
+        payload.get("new_received_count"),
+        payload.get("historical_received_count"),
+    )
+
+
+def _format_trade_offers_summary_view(payload: dict) -> str:
+    return "sent={0} received={1} descriptions={2} next_cursor={3}".format(
+        payload.get("sent_count"),
+        payload.get("received_count"),
+        payload.get("description_count"),
+        payload.get("next_cursor"),
+    )
+
+
+def _format_trade_history_summary(payload: dict) -> str:
+    first = payload.get("trades", [None])[0] if payload.get("trades") else None
+    first_trade_id = first.get("trade_id") if first else None
+    return "trades={0} total={1} first_trade_id={2} more={3}".format(
+        payload.get("trade_count"),
+        payload.get("total_trades"),
+        first_trade_id,
+        payload.get("more"),
+    )
+
+
 def _format_app_details(payload: dict) -> str:
     return "name={0} type={1} free={2}".format(
         payload.get("name", ""),
@@ -811,6 +861,23 @@ def _format_found_games(payload: dict) -> str:
     games = payload.get("games", [])
     first_name = games[0].get("name") if games and games[0].get("name") else "<none>"
     return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
+def _format_badges_summary(payload: dict) -> str:
+    badges = payload.get("badges", [])
+    first_badge_id = badges[0].get("badge_id") if badges else None
+    return "badges={0} player_level={1} first_badge_id={2}".format(
+        payload.get("badge_count"),
+        payload.get("player_level"),
+        first_badge_id,
+    )
+
+
+def _format_badge_progress_summary(payload: dict) -> str:
+    return "quests={0} completed={1}".format(
+        payload.get("quest_count"),
+        payload.get("completed_count"),
+    )
 
 
 def _format_app_details_many(payload: list) -> str:
