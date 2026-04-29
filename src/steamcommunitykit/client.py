@@ -326,6 +326,32 @@ class SteamClient:
             **kwargs,
         )
 
+    def get_store_app_list(self, **kwargs) -> dict:
+        return self.store.get_app_list(**kwargs)
+
+    def get_store_app_list_summary(self, **kwargs) -> dict:
+        return self.store.get_app_list_summary(**kwargs)
+
+    def get_store_app_list_map(self, **kwargs) -> dict:
+        return self.store.get_app_list_map(**kwargs)
+
+    def find_store_app(
+        self,
+        query: str,
+        *,
+        case_sensitive: bool = False,
+        exact: bool = False,
+        prefer_exact: bool = True,
+        **kwargs,
+    ) -> dict:
+        return self.store.find_app(
+            query,
+            case_sensitive=case_sensitive,
+            exact=exact,
+            prefer_exact=prefer_exact,
+            **kwargs,
+        )
+
     def get_news_summary(self, app_id, **kwargs) -> dict:
         return self.news.get_news_summary(app_id, **kwargs)
 
@@ -655,6 +681,35 @@ class SteamClient:
             sort_dir=sort_dir,
         )
 
+    def find_market_item(
+        self,
+        query: str,
+        *,
+        app_id=None,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+        max_pages=None,
+        max_results=None,
+        market_hash_name: Optional[str] = None,
+        name: Optional[str] = None,
+        prefer_exact: bool = True,
+    ) -> dict:
+        return self.market.find_search_item(
+            query,
+            app_id=app_id,
+            count=count,
+            search_descriptions=search_descriptions,
+            sort_column=sort_column,
+            sort_dir=sort_dir,
+            max_pages=max_pages,
+            max_results=max_results,
+            market_hash_name=market_hash_name,
+            name=name,
+            prefer_exact=prefer_exact,
+        )
+
     def get_market_price_overview(
         self,
         app_id,
@@ -715,6 +770,9 @@ class SteamClient:
 
     def get_market_price_history(self, app_id, market_hash_name: str) -> dict:
         return self.market.get_price_history(app_id, market_hash_name)
+
+    def get_market_price_history_summary(self, app_id, market_hash_name: str) -> dict:
+        return self.market.get_price_history_summary(app_id, market_hash_name)
 
     def get_market_price_snapshot(
         self,

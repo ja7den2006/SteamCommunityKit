@@ -95,6 +95,20 @@ class MarketService:
             "raw": item,
         }
 
+    @staticmethod
+    def _coerce_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _coerce_int(value):
+        try:
+            return int(str(value).replace(",", ""))
+        except (TypeError, ValueError):
+            return None
+
     def search_items_summary(
         self,
         *,
@@ -186,6 +200,64 @@ class MarketService:
             "items": items,
             "pages": pages,
             "raw": pages[-1].get("raw") if pages else {},
+        }
+
+    def find_search_item(
+        self,
+        query: str,
+        *,
+        app_id=None,
+        count: int = 10,
+        search_descriptions: bool = False,
+        sort_column: str = "default",
+        sort_dir: str = "desc",
+        max_pages=None,
+        max_results=None,
+        market_hash_name: Optional[str] = None,
+        name: Optional[str] = None,
+        prefer_exact: bool = True,
+    ) -> dict:
+        payload = self.search_all_items(
+            query=query,
+            app_id=app_id,
+            count=count,
+            search_descriptions=search_descriptions,
+            sort_column=sort_column,
+            sort_dir=sort_dir,
+            max_pages=max_pages,
+            max_results=max_results,
+        )
+        normalized_hash = (market_hash_name or "").strip().lower()
+        normalized_name = (name or "").strip().lower()
+
+        exact_matches = []
+        partial_matches = []
+        for item in payload.get("items", []):
+            item_hash = (item.get("market_hash_name") or item.get("hash_name") or "").lower()
+            item_name = (item.get("name") or "").lower()
+            if normalized_hash and item_hash == normalized_hash:
+                exact_matches.append(item)
+                continue
+            if normalized_name and item_name == normalized_name:
+                exact_matches.append(item)
+                continue
+            if normalized_hash and normalized_hash in item_hash:
+                partial_matches.append(item)
+                continue
+            if normalized_name and normalized_name in item_name:
+                partial_matches.append(item)
+
+        if not normalized_hash and not normalized_name:
+            exact_matches = payload.get("items", [])[:1]
+
+        matches = exact_matches if prefer_exact and exact_matches else exact_matches + partial_matches
+        return {
+            "query": query,
+            "match": matches[0] if matches else None,
+            "matches": matches,
+            "count": len(matches),
+            "matched_exactly": bool(matches and matches[0] in exact_matches),
+            "raw": payload,
         }
 
     def get_item_listings(
@@ -521,6 +593,51 @@ class MarketService:
             "price_prefix": prefix_match.group(1) if prefix_match else "",
             "price_suffix": suffix_match.group(1) if suffix_match else "",
             "prices": prices,
+        }
+
+    def get_price_history_summary(self, app_id, market_hash_name: str) -> dict:
+        payload = self.get_price_history(app_id, market_hash_name)
+        rows = payload.get("prices", [])
+        parsed_rows = []
+        numeric_prices = []
+        numeric_volumes = []
+
+        for row in rows:
+            if len(row) < 3:
+                continue
+            price = self._coerce_float(row[1])
+            volume = self._coerce_int(row[2])
+            parsed = {
+                "date": row[0],
+                "price": price,
+                "volume": volume,
+                "raw": row,
+            }
+            parsed_rows.append(parsed)
+            if price is not None:
+                numeric_prices.append(price)
+            if volume is not None:
+                numeric_volumes.append(volume)
+
+        latest = parsed_rows[-1] if parsed_rows else {}
+        average_price = round(sum(numeric_prices) / len(numeric_prices), 4) if numeric_prices else None
+        average_volume = round(sum(numeric_volumes) / len(numeric_volumes), 2) if numeric_volumes else None
+
+        return {
+            "app_id": validate_app_id(app_id),
+            "market_hash_name": ensure_not_blank(market_hash_name, "market_hash_name"),
+            "point_count": len(parsed_rows),
+            "latest_date": latest.get("date"),
+            "latest_price": latest.get("price"),
+            "latest_volume": latest.get("volume"),
+            "min_price": min(numeric_prices) if numeric_prices else None,
+            "max_price": max(numeric_prices) if numeric_prices else None,
+            "average_price": average_price,
+            "average_volume": average_volume,
+            "price_prefix": payload.get("price_prefix", ""),
+            "price_suffix": payload.get("price_suffix", ""),
+            "points": parsed_rows,
+            "raw": payload,
         }
 
     def get_market_price_snapshot(

@@ -63,6 +63,25 @@ class StoreService:
             "raw": payload,
         }
 
+    def get_app_list_map(self, **kwargs) -> dict:
+        apps = self.get_app_list_summary(**kwargs).get("apps", [])
+        by_id = {
+            str(app["app_id"]): app
+            for app in apps
+            if app.get("app_id") is not None
+        }
+        by_name = {
+            app["name"]: app
+            for app in apps
+            if app.get("name")
+        }
+        return {
+            "apps": apps,
+            "count": len(apps),
+            "apps_by_id": by_id,
+            "apps_by_name": by_name,
+        }
+
     def search_apps(
         self,
         query: str,
@@ -86,4 +105,37 @@ class StoreService:
             "query": normalized_query,
             "matches": matches,
             "count": len(matches),
+        }
+
+    def find_app(
+        self,
+        query: str,
+        *,
+        case_sensitive: bool = False,
+        exact: bool = False,
+        prefer_exact: bool = True,
+        **kwargs,
+    ) -> dict:
+        normalized_query = ensure_not_blank(query, "query")
+        comparison_query = normalized_query if case_sensitive else normalized_query.lower()
+        apps = self.get_app_list_summary(**kwargs).get("apps", [])
+
+        exact_matches = []
+        partial_matches = []
+        for app in apps:
+            name = app.get("name", "")
+            haystack = name if case_sensitive else name.lower()
+            if haystack == comparison_query:
+                exact_matches.append(app)
+            elif not exact and comparison_query in haystack:
+                partial_matches.append(app)
+
+        matches = exact_matches if exact or (prefer_exact and exact_matches) else exact_matches + partial_matches
+        match = matches[0] if matches else None
+        return {
+            "query": normalized_query,
+            "match": match,
+            "matches": matches,
+            "count": len(matches),
+            "matched_exactly": bool(match and match in exact_matches),
         }

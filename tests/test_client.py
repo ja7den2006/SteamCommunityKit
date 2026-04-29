@@ -739,6 +739,51 @@ def test_store_service_search_apps_filters_results() -> None:
     client.close()
 
 
+def test_store_service_get_app_list_map_indexes_by_id_and_name() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "apps": [
+                        {"appid": 10, "name": "Counter-Strike"},
+                        {"appid": 730, "name": "Counter-Strike 2"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_store_app_list_map(include_games=True)
+
+    assert result["count"] == 2
+    assert result["apps_by_id"]["10"]["name"] == "Counter-Strike"
+    assert result["apps_by_name"]["Counter-Strike 2"]["app_id"] == 730
+    client.close()
+
+
+def test_store_service_find_app_prefers_exact_match() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "apps": [
+                        {"appid": 10, "name": "Counter-Strike"},
+                        {"appid": 730, "name": "Counter-Strike 2"},
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.find_store_app("Counter-Strike 2", include_games=True)
+
+    assert result["matched_exactly"] is True
+    assert result["match"]["app_id"] == 730
+    client.close()
+
+
 def test_published_files_query_uses_public_base_url() -> None:
     session = RecordingSession(DummyResponse(json_data={"response": {"total": 0}}))
     client = SteamClient(api_key="test", session=session)
@@ -2369,6 +2414,55 @@ def test_market_get_price_history_parses_listings_page_html() -> None:
     assert result["price_suffix"] == ""
     assert len(result["prices"]) == 2
     assert result["prices"][0][0] == "Feb 21 2014 01: +0"
+    client.close()
+
+
+def test_market_find_search_item_prefers_exact_market_hash_name() -> None:
+    client = SteamClient()
+
+    original_search_all_items = client.market.search_all_items
+    client.market.search_all_items = lambda **kwargs: {
+        "items": [
+            {"market_hash_name": "AK-47 | Other", "name": "AK-47 | Other"},
+            {"market_hash_name": "AK-47 | Redline (Field-Tested)", "name": "AK-47 | Redline (Field-Tested)"},
+        ]
+    }
+
+    result = client.find_market_item(
+        "AK-47",
+        app_id=730,
+        market_hash_name="AK-47 | Redline (Field-Tested)",
+    )
+
+    assert result["matched_exactly"] is True
+    assert result["match"]["market_hash_name"] == "AK-47 | Redline (Field-Tested)"
+
+    client.market.search_all_items = original_search_all_items
+    client.close()
+
+
+def test_market_price_history_summary_calculates_ranges() -> None:
+    client = SteamClient()
+
+    original_get_price_history = client.market.get_price_history
+    client.market.get_price_history = lambda app_id, market_hash_name: {
+        "price_prefix": "$",
+        "price_suffix": "",
+        "prices": [
+            ["Feb 21 2014 01: +0", 41.405, "198"],
+            ["Feb 22 2014 01: +0", 35.08, "225"],
+            ["Feb 23 2014 01: +0", 38.5, "210"],
+        ],
+    }
+
+    result = client.get_market_price_history_summary(730, "AK-47 | Example")
+
+    assert result["point_count"] == 3
+    assert result["latest_price"] == 38.5
+    assert result["min_price"] == 35.08
+    assert result["max_price"] == 41.405
+
+    client.market.get_price_history = original_get_price_history
     client.close()
 
 

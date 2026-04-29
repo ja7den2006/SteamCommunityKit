@@ -332,6 +332,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Find Store App",
+        lambda: _format_store_app_find(
+            client.find_store_app(args.store_search_query, prefer_exact=False, include_games=True)
+        ),
+    )
+    run_check(
         "Query Published Files",
         lambda: _capture_workshop_query_summary(
             workshop_cache,
@@ -498,6 +504,19 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Find Market Item",
+        lambda: _format_market_find(
+            client.find_market_item(
+                args.market_query,
+                app_id=args.market_app_id,
+                count=10,
+                max_pages=2,
+                max_results=20,
+                market_hash_name=args.market_hash_name,
+            )
+        ),
+    )
+    run_check(
         "Market Item Name ID",
         lambda: str(client.get_market_item_name_id(args.market_app_id, args.market_hash_name)),
     )
@@ -505,6 +524,12 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         "Market Price History",
         lambda: "points={0}".format(
             len(client.get_market_price_history(args.market_app_id, args.market_hash_name).get("prices", []))
+        ),
+    )
+    run_check(
+        "Market Price History Summary",
+        lambda: _format_market_price_history_summary(
+            client.get_market_price_history_summary(args.market_app_id, args.market_hash_name)
         ),
     )
     run_check(
@@ -886,6 +911,15 @@ def _format_store_app_search(payload: dict) -> str:
     return "matches={0} first={1}".format(payload.get("count"), first_name)
 
 
+def _format_store_app_find(payload: dict) -> str:
+    match = payload.get("match") or {}
+    return "matched={0} exact={1} app_id={2}".format(
+        match.get("name", "<none>"),
+        payload.get("matched_exactly"),
+        match.get("app_id"),
+    )
+
+
 def _format_friend_summaries(payload: dict) -> str:
     friends = payload.get("friends", [])
     first_name = friends[0]["personaname"] if friends else "<none>"
@@ -983,6 +1017,15 @@ def _format_market_price_snapshot(payload: dict) -> str:
     )
 
 
+def _format_market_price_history_summary(payload: dict) -> str:
+    return "points={0} latest={1} min={2} max={3}".format(
+        payload.get("point_count"),
+        payload.get("latest_price"),
+        payload.get("min_price"),
+        payload.get("max_price"),
+    )
+
+
 def _format_market_listings_summary(payload: dict) -> str:
     cheapest = payload.get("cheapest_listing") or {}
     cheapest_price = cheapest.get("converted_price") or cheapest.get("price")
@@ -1012,6 +1055,14 @@ def _format_market_search_summary(payload: dict) -> str:
         len(items),
         payload.get("total_count"),
         first_hash_name,
+    )
+
+
+def _format_market_find(payload: dict) -> str:
+    match = payload.get("match") or {}
+    return "matched={0} exact={1}".format(
+        _safe_console_text(match.get("market_hash_name") or match.get("name") or "<none>"),
+        payload.get("matched_exactly"),
     )
 
 
