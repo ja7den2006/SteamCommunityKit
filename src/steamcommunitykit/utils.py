@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Union
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from steamcommunitykit.exceptions import SteamValidationError
 
 
 STEAM_ID64_BASE = 76561197960265728
+STEAMCOMMUNITY_HOSTS = {"steamcommunity.com", "www.steamcommunity.com"}
 
 
 def ensure_not_blank(value: str, field_name: str) -> str:
@@ -167,7 +168,7 @@ def parse_steam_profile_identifier(
     parsed = urlparse(normalized)
     if parsed.scheme or parsed.netloc:
         host = parsed.netloc.lower()
-        if host not in {"steamcommunity.com", "www.steamcommunity.com"}:
+        if host not in STEAMCOMMUNITY_HOSTS:
             raise SteamValidationError("identifier must point to steamcommunity.com.")
         parts = [part for part in parsed.path.split("/") if part]
         if len(parts) >= 2 and parts[0].lower() == "profiles":
@@ -200,12 +201,161 @@ def account_id_to_steam_id(account_id: Union[str, int]) -> str:
     return str(STEAM_ID64_BASE + normalized)
 
 
+def build_steam_profile_url(
+    *,
+    steam_id: Union[str, int, None] = None,
+    vanity: Union[str, None] = None,
+) -> str:
+    if steam_id is None and vanity is None:
+        raise SteamValidationError(
+            "build_steam_profile_url requires either steam_id or vanity."
+        )
+    if steam_id is not None and vanity is not None:
+        raise SteamValidationError(
+            "build_steam_profile_url accepts only one of steam_id or vanity."
+        )
+    if steam_id is not None:
+        normalized_steam_id = validate_steam_id(steam_id, "steam_id")
+        return "https://steamcommunity.com/profiles/{0}/".format(normalized_steam_id)
+    normalized_vanity = ensure_not_blank(str(vanity), "vanity").strip("/")
+    return "https://steamcommunity.com/id/{0}/".format(quote(normalized_vanity, safe=""))
+
+
+def parse_steam_profile_url(profile_url: str) -> Dict[str, str]:
+    normalized = ensure_not_blank(profile_url, "profile_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("profile_url must be an http or https URL.")
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
+        raise SteamValidationError("profile_url must point to steamcommunity.com.")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2:
+        raise SteamValidationError(
+            "profile_url must use /profiles/<steamid> or /id/<vanity>."
+        )
+    if parts[0].lower() == "profiles":
+        steam_id = validate_steam_id(parts[1], "steam_id")
+        return {
+            "profile_type": "steam_id",
+            "steam_id": steam_id,
+            "value": steam_id,
+            "profile_url": build_steam_profile_url(steam_id=steam_id),
+        }
+    if parts[0].lower() == "id":
+        vanity = ensure_not_blank(unquote(parts[1]), "vanity").strip("/")
+        return {
+            "profile_type": "vanity",
+            "vanity": vanity,
+            "value": vanity,
+            "profile_url": build_steam_profile_url(vanity=vanity),
+        }
+    raise SteamValidationError(
+        "profile_url must use /profiles/<steamid> or /id/<vanity>."
+    )
+
+
+def build_group_url(group_slug: str) -> str:
+    normalized_slug = ensure_not_blank(group_slug, "group_slug").strip("/")
+    return "https://steamcommunity.com/groups/{0}/".format(
+        quote(normalized_slug, safe="")
+    )
+
+
+def parse_group_url(group_url: str) -> Dict[str, str]:
+    normalized = ensure_not_blank(group_url, "group_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("group_url must be an http or https URL.")
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
+        raise SteamValidationError("group_url must point to steamcommunity.com.")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2 or parts[0].lower() != "groups":
+        raise SteamValidationError("group_url must use /groups/<group-slug>.")
+
+    group_slug = ensure_not_blank(unquote(parts[1]), "group_slug").strip("/")
+    return {
+        "group_slug": group_slug,
+        "group_url": build_group_url(group_slug),
+    }
+
+
+def build_workshop_file_url(published_file_id: Union[str, int]) -> str:
+    normalized_id = validate_uint64(published_file_id, "published_file_id")
+    return "https://steamcommunity.com/sharedfiles/filedetails/?id={0}".format(
+        normalized_id
+    )
+
+
+def parse_workshop_file_url(workshop_url: str) -> Dict[str, str]:
+    normalized = ensure_not_blank(workshop_url, "workshop_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("workshop_url must be an http or https URL.")
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
+        raise SteamValidationError("workshop_url must point to steamcommunity.com.")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2 or parts[0].lower() != "sharedfiles" or parts[1].lower() != "filedetails":
+        raise SteamValidationError(
+            "workshop_url must use /sharedfiles/filedetails/?id=<published_file_id>."
+        )
+
+    published_file_id = parse_qs(parsed.query).get("id", [None])[0]
+    if not published_file_id:
+        raise SteamValidationError(
+            "workshop_url is missing the id query parameter."
+        )
+    normalized_id = validate_uint64(published_file_id, "published_file_id")
+    return {
+        "published_file_id": normalized_id,
+        "workshop_url": build_workshop_file_url(normalized_id),
+    }
+
+
+def build_market_listing_url(app_id: Union[str, int], market_hash_name: str) -> str:
+    normalized_app_id = validate_app_id(app_id, "app_id")
+    normalized_hash_name = ensure_not_blank(market_hash_name, "market_hash_name")
+    encoded_hash_name = quote(normalized_hash_name, safe="")
+    return "https://steamcommunity.com/market/listings/{0}/{1}".format(
+        normalized_app_id,
+        encoded_hash_name,
+    )
+
+
+def parse_market_listing_url(market_url: str) -> Dict[str, Union[int, str]]:
+    normalized = ensure_not_blank(market_url, "market_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("market_url must be an http or https URL.")
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
+        raise SteamValidationError("market_url must point to steamcommunity.com.")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 4 or parts[0].lower() != "market" or parts[1].lower() != "listings":
+        raise SteamValidationError(
+            "market_url must use /market/listings/<app_id>/<market_hash_name>."
+        )
+
+    app_id = validate_app_id(parts[2], "app_id")
+    market_hash_name = ensure_not_blank(
+        unquote("/".join(parts[3:])),
+        "market_hash_name",
+    )
+    return {
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "market_url": build_market_listing_url(app_id, market_hash_name),
+    }
+
+
 def parse_trade_offer_url(trade_url: str) -> Dict[str, Union[str, int]]:
     normalized = ensure_not_blank(trade_url, "trade_url")
     parsed = urlparse(normalized)
     if parsed.scheme not in {"http", "https"}:
         raise SteamValidationError("trade_url must be an http or https URL.")
-    if parsed.netloc.lower() not in {"steamcommunity.com", "www.steamcommunity.com"}:
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
         raise SteamValidationError("trade_url must point to steamcommunity.com.")
     query = parse_qs(parsed.query)
     partner_id = query.get("partner", [None])[0]

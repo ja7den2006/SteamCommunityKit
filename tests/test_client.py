@@ -10,8 +10,16 @@ from steamcommunitykit import (
     SteamResponseError,
     SteamValidationError,
     account_id_to_steam_id,
+    build_group_url,
+    build_market_listing_url,
+    build_steam_profile_url,
     build_trade_offer_url,
+    build_workshop_file_url,
+    parse_group_url,
+    parse_market_listing_url,
+    parse_steam_profile_url,
     parse_trade_offer_url,
+    parse_workshop_file_url,
     steam_id_to_account_id,
 )
 from steamcommunitykit.http import SteamHTTPTransport
@@ -306,6 +314,44 @@ def test_trade_offer_url_helpers_parse_and_build() -> None:
     assert parsed["partner_account_id"] == 1189313876
     assert parsed["partner_steam_id"] == "76561199149579604"
     assert parsed["token"] == "vrJtfrV_"
+
+
+def test_profile_url_helpers_build_and_parse() -> None:
+    profile_url = build_steam_profile_url(vanity="gaben")
+    parsed = parse_steam_profile_url(profile_url)
+
+    assert profile_url == "https://steamcommunity.com/id/gaben/"
+    assert parsed["profile_type"] == "vanity"
+    assert parsed["vanity"] == "gaben"
+    assert parsed["profile_url"] == profile_url
+
+
+def test_group_url_helpers_build_and_parse() -> None:
+    group_url = build_group_url("steamdb")
+    parsed = parse_group_url(group_url)
+
+    assert group_url == "https://steamcommunity.com/groups/steamdb/"
+    assert parsed["group_slug"] == "steamdb"
+    assert parsed["group_url"] == group_url
+
+
+def test_workshop_url_helpers_build_and_parse() -> None:
+    workshop_url = build_workshop_file_url("3210489689")
+    parsed = parse_workshop_file_url(workshop_url)
+
+    assert workshop_url == "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
+    assert parsed["published_file_id"] == "3210489689"
+    assert parsed["workshop_url"] == workshop_url
+
+
+def test_market_listing_url_helpers_build_and_parse() -> None:
+    market_url = build_market_listing_url(730, "AK-47 | Redline (Field-Tested)")
+    parsed = parse_market_listing_url(market_url)
+
+    assert market_url == "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20%28Field-Tested%29"
+    assert parsed["app_id"] == 730
+    assert parsed["market_hash_name"] == "AK-47 | Redline (Field-Tested)"
+    assert parsed["market_url"] == market_url
 
 
 def test_users_service_uses_public_player_summaries_endpoint() -> None:
@@ -3764,4 +3810,119 @@ def test_client_group_helpers_delegate_to_groups_service() -> None:
     client.groups.check_url_availability = original_check_url_availability
     client.groups.check_tag_availability = original_check_tag_availability
     client.groups.create_group = original_create_group
+    client.close()
+
+
+def test_remote_storage_collection_child_map_indexes_children() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "collectiondetails": [
+                            {
+                                "publishedfileid": "3210489689",
+                                "result": 1,
+                                "childcount": 2,
+                                "children": [
+                                    {"publishedfileid": "111"},
+                                    {"publishedfileid": "222"},
+                                ],
+                            }
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "publishedfiledetails": [
+                            {"publishedfileid": "111", "result": 1, "title": "Alpha Child"},
+                            {"publishedfileid": "222", "result": 1, "title": "Beta Child"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_collection_child_map("3210489689")
+
+    assert result["children_by_id"]["111"]["title"] == "Alpha Child"
+    assert result["children_by_id"]["222"]["title"] == "Beta Child"
+    client.close()
+
+
+def test_remote_storage_find_collection_child_prefers_exact_title() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "collectiondetails": [
+                            {
+                                "publishedfileid": "3210489689",
+                                "result": 1,
+                                "childcount": 2,
+                                "children": [
+                                    {"publishedfileid": "111"},
+                                    {"publishedfileid": "222"},
+                                ],
+                            }
+                        ]
+                    }
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "publishedfiledetails": [
+                            {"publishedfileid": "111", "result": 1, "title": "ChengHai3C test"},
+                            {"publishedfileid": "222", "result": 1, "title": "ChengHai3C test beta"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.find_collection_child("3210489689", title="ChengHai3C test")
+
+    assert result["matched_exactly"] is True
+    assert result["count"] == 1
+    assert result["match"]["published_file_id"] == "111"
+    client.close()
+
+
+def test_published_files_find_published_file_prefers_exact_title() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "total": 2,
+                    "next_cursor": "*",
+                    "publishedfiledetails": [
+                        {"publishedfileid": "111", "result": 1, "title": "Dota Run Old"},
+                        {"publishedfileid": "222", "result": 1, "title": "Dota Run Old Beta"},
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.find_published_file(
+        query_type=0,
+        title="Dota Run Old",
+        app_id=570,
+        max_pages=1,
+        max_items=10,
+    )
+
+    assert result["matched_exactly"] is True
+    assert result["count"] == 1
+    assert result["match"]["published_file_id"] == "111"
+    assert session.calls[0]["params"]["search_text"] == "Dota Run Old"
     client.close()

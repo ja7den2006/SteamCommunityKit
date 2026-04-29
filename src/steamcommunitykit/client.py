@@ -294,11 +294,56 @@ class SteamClient:
     def get_collection_child_details(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_child_details(published_file_id)
 
+    def get_collection_child_map(self, published_file_id) -> dict:
+        return self.remote_storage.get_collection_child_map(published_file_id)
+
+    def find_collection_child(
+        self,
+        published_file_id,
+        *,
+        child_published_file_id=None,
+        title=None,
+        exact: bool = False,
+        prefer_exact: bool = True,
+    ) -> dict:
+        return self.remote_storage.find_collection_child(
+            published_file_id,
+            child_published_file_id=child_published_file_id,
+            title=title,
+            exact=exact,
+            prefer_exact=prefer_exact,
+        )
+
     def query_published_files(self, **kwargs) -> dict:
         return self.published_files.query_files_summary(**kwargs)
 
     def query_all_published_files(self, *, max_pages: Optional[int] = None, max_items: Optional[int] = None, **kwargs) -> dict:
         return self.published_files.query_all_files_summary(
+            max_pages=max_pages,
+            max_items=max_items,
+            **kwargs,
+        )
+
+    def find_published_file(
+        self,
+        *,
+        query_type: int,
+        title: Optional[str] = None,
+        published_file_id=None,
+        case_sensitive: bool = False,
+        exact: bool = False,
+        prefer_exact: bool = True,
+        max_pages=None,
+        max_items=None,
+        **kwargs,
+    ) -> dict:
+        return self.published_files.find_published_file(
+            query_type=query_type,
+            title=title,
+            published_file_id=published_file_id,
+            case_sensitive=case_sensitive,
+            exact=exact,
+            prefer_exact=prefer_exact,
             max_pages=max_pages,
             max_items=max_items,
             **kwargs,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Sequence
 
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.constants import WEB_API_BASE_URL
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.services.remote_storage import RemoteStorageService
@@ -184,4 +185,80 @@ class PublishedFilesService:
             "item_ids": item_ids,
             "pages": pages,
             "raw": pages[-1]["raw"] if pages else {},
+        }
+
+    def find_published_file(
+        self,
+        *,
+        query_type: int,
+        title: Optional[str] = None,
+        published_file_id=None,
+        case_sensitive: bool = False,
+        exact: bool = False,
+        prefer_exact: bool = True,
+        max_pages=None,
+        max_items=None,
+        **kwargs,
+    ) -> dict:
+        if title is None and published_file_id is None:
+            raise SteamValidationError(
+                "find_published_file requires title or published_file_id."
+            )
+
+        if title is not None and "search_text" not in kwargs:
+            kwargs["search_text"] = ensure_not_blank(title, "title")
+
+        payload = self.query_all_files_summary(
+            query_type=query_type,
+            max_pages=max_pages,
+            max_items=max_items,
+            **kwargs,
+        )
+        matches = list(payload.get("items", []))
+        matched_exactly = False
+
+        if published_file_id is not None:
+            target_id = validate_uint64(published_file_id, "published_file_id")
+            matches = [
+                item
+                for item in matches
+                if str(item.get("published_file_id")) == target_id
+            ]
+            matched_exactly = bool(matches)
+
+        if title is not None:
+            query = ensure_not_blank(title, "title")
+            normalized_query = query if case_sensitive else query.casefold()
+            exact_matches = []
+            partial_matches = []
+
+            for item in matches:
+                item_title = item.get("title") or ""
+                normalized_title = item_title if case_sensitive else item_title.casefold()
+                if normalized_title == normalized_query:
+                    exact_matches.append(item)
+                if normalized_query in normalized_title:
+                    partial_matches.append(item)
+
+            if exact:
+                matches = exact_matches
+                matched_exactly = bool(exact_matches)
+            elif prefer_exact and exact_matches:
+                matches = exact_matches
+                matched_exactly = True
+            else:
+                matches = partial_matches if partial_matches else exact_matches
+                matched_exactly = bool(exact_matches) and bool(matches)
+
+        return {
+            "total": payload.get("total"),
+            "pages_fetched": payload.get("pages_fetched"),
+            "next_cursor": payload.get("next_cursor"),
+            "items": payload.get("items", []),
+            "item_ids": payload.get("item_ids", []),
+            "matches": matches,
+            "match": matches[0] if matches else None,
+            "count": len(matches),
+            "matched_exactly": matched_exactly,
+            "raw": payload.get("raw", {}),
         }

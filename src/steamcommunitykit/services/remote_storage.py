@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL, WEB_API_BASE_URL
-from steamcommunitykit.exceptions import SteamNotFoundError
+from steamcommunitykit.exceptions import SteamNotFoundError, SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
-from steamcommunitykit.utils import normalize_uint64_ids, validate_app_id, validate_steam_id, validate_uint64
+from steamcommunitykit.utils import (
+    ensure_not_blank,
+    normalize_uint64_ids,
+    validate_app_id,
+    validate_steam_id,
+    validate_uint64,
+)
 
 
 class RemoteStorageService:
@@ -149,6 +155,77 @@ class RemoteStorageService:
             "collection": collection,
             "child_ids": child_ids,
             "children": children,
+        }
+
+    def get_collection_child_map(self, published_file_id) -> dict:
+        payload = self.get_collection_child_details(published_file_id)
+        children = payload.get("children", [])
+        payload["children_by_id"] = {
+            str(child["published_file_id"]): child
+            for child in children
+            if child.get("published_file_id")
+        }
+        return payload
+
+    def find_collection_child(
+        self,
+        published_file_id,
+        *,
+        child_published_file_id=None,
+        title=None,
+        exact: bool = False,
+        prefer_exact: bool = True,
+    ) -> dict:
+        if child_published_file_id is None and title is None:
+            raise SteamValidationError(
+                "find_collection_child requires child_published_file_id or title.",
+            )
+
+        payload = self.get_collection_child_map(published_file_id)
+        matches = list(payload.get("children", []))
+        matched_exactly = False
+
+        if child_published_file_id is not None:
+            target_id = validate_uint64(child_published_file_id, "child_published_file_id")
+            matches = [
+                child
+                for child in matches
+                if str(child.get("published_file_id")) == target_id
+            ]
+            matched_exactly = bool(matches)
+
+        if title is not None:
+            query = ensure_not_blank(title, "title")
+            lowered_query = query.casefold()
+            exact_matches = [
+                child
+                for child in matches
+                if (child.get("title") or "").casefold() == lowered_query
+            ]
+            partial_matches = [
+                child
+                for child in matches
+                if lowered_query in (child.get("title") or "").casefold()
+            ]
+            if exact:
+                matches = exact_matches
+                matched_exactly = bool(exact_matches)
+            elif prefer_exact and exact_matches:
+                matches = exact_matches
+                matched_exactly = True
+            else:
+                matches = partial_matches if partial_matches else exact_matches
+                matched_exactly = bool(exact_matches) and bool(matches)
+
+        return {
+            "collection": payload.get("collection"),
+            "child_ids": payload.get("child_ids", []),
+            "children": payload.get("children", []),
+            "children_by_id": payload.get("children_by_id", {}),
+            "matches": matches,
+            "match": matches[0] if matches else None,
+            "count": len(matches),
+            "matched_exactly": matched_exactly,
         }
 
     def get_published_file_detail(self, published_file_id) -> dict:

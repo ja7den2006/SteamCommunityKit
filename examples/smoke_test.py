@@ -11,7 +11,18 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from steamcommunitykit import SteamClient, SteamError  # noqa: E402
+from steamcommunitykit import (  # noqa: E402
+    SteamClient,
+    SteamError,
+    build_group_url,
+    build_market_listing_url,
+    build_steam_profile_url,
+    build_workshop_file_url,
+    parse_group_url,
+    parse_market_listing_url,
+    parse_steam_profile_url,
+    parse_workshop_file_url,
+)
 
 
 DEFAULT_STEAM_ID = "76561197960435530"
@@ -77,6 +88,7 @@ def configure_community_session(client: SteamClient, args) -> bool:
 def run_public_suite(client: SteamClient, args) -> None:
     print_header("Public / API Key Tests")
     workshop_cache = {}
+    collection_cache = {}
 
     run_check(
         "Resolve Steam ID From Vanity",
@@ -393,6 +405,55 @@ def run_public_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Collection Child Details",
         lambda: _format_collection_children(client.get_collection_child_details(args.collection_published_file_id)),
+    )
+    run_check(
+        "Get Collection Child Map",
+        lambda: _capture_result(
+            collection_cache,
+            "child_map",
+            lambda: client.get_collection_child_map(args.collection_published_file_id),
+            _format_collection_child_map,
+        ),
+    )
+    run_check(
+        "Find Collection Child",
+        lambda: _format_collection_child_find(
+            _find_cached_collection_child(client, collection_cache, args)
+        ),
+    )
+    run_check(
+        "Find Published File",
+        lambda: _format_published_file_find(
+            _find_cached_published_file(client, workshop_cache, args)
+        ),
+    )
+    run_check(
+        "Profile URL Helpers",
+        lambda: _format_profile_url_helper(
+            parse_steam_profile_url(build_steam_profile_url(vanity=args.vanity))
+        ),
+    )
+    run_check(
+        "Group URL Helpers",
+        lambda: _format_group_url_helper(
+            parse_group_url(build_group_url(args.group_url))
+        ),
+    )
+    run_check(
+        "Workshop URL Helpers",
+        lambda: _format_workshop_url_helper(
+            parse_workshop_file_url(
+                build_workshop_file_url(_require_workshop_item_id(workshop_cache, args))
+            )
+        ),
+    )
+    run_check(
+        "Market Listing URL Helpers",
+        lambda: _format_market_url_helper(
+            parse_market_listing_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name)
+            )
+        ),
     )
     run_check(
         "Get Web API Server Info",
@@ -1120,6 +1181,44 @@ def _require_workshop_item_id(cache: dict, args) -> str:
     return args.published_file_id
 
 
+def _find_cached_published_file(client: SteamClient, cache: dict, args) -> dict:
+    payload = cache.get("query_published_files")
+    if payload and payload.get("items"):
+        title = payload["items"][0].get("title")
+        if title:
+            return client.find_published_file(
+                query_type=0,
+                title=title,
+                app_id=args.app_id,
+                max_pages=1,
+                max_items=10,
+                return_short_description=True,
+            )
+    return client.find_published_file(
+        query_type=0,
+        published_file_id=_require_workshop_item_id(cache, args),
+        app_id=args.app_id,
+        max_pages=1,
+        max_items=10,
+        return_short_description=True,
+    )
+
+
+def _find_cached_collection_child(client: SteamClient, cache: dict, args) -> dict:
+    payload = cache.get("child_map")
+    if payload and payload.get("children"):
+        title = payload["children"][0].get("title")
+        if title:
+            return client.find_collection_child(
+                args.collection_published_file_id,
+                title=title,
+            )
+    return client.find_collection_child(
+        args.collection_published_file_id,
+        child_published_file_id=args.published_file_id,
+    )
+
+
 def _format_published_file_detail(payload: dict) -> str:
     return "title={0} app={1} subs={2}".format(
         payload.get("title", ""),
@@ -1159,6 +1258,52 @@ def _format_collection_children(payload: dict) -> str:
     first_title = children[0].get("title") if children else "<none>"
     first_title = _safe_console_text(first_title)
     return "children={0} first={1}".format(len(children), first_title)
+
+
+def _format_collection_child_map(payload: dict) -> str:
+    children_by_id = payload.get("children_by_id", {})
+    first_child_id = next(iter(children_by_id), "<none>")
+    return "children={0} first_id={1}".format(len(children_by_id), first_child_id)
+
+
+def _format_collection_child_find(payload: dict) -> str:
+    match = payload.get("match") or {}
+    return "matched={0} exact={1} child_id={2}".format(
+        _safe_console_text(match.get("title") or "<none>"),
+        payload.get("matched_exactly"),
+        match.get("published_file_id"),
+    )
+
+
+def _format_published_file_find(payload: dict) -> str:
+    match = payload.get("match") or {}
+    return "matched={0} exact={1} published_file_id={2}".format(
+        _safe_console_text(match.get("title") or "<none>"),
+        payload.get("matched_exactly"),
+        match.get("published_file_id"),
+    )
+
+
+def _format_profile_url_helper(payload: dict) -> str:
+    return "type={0} value={1}".format(
+        payload.get("profile_type"),
+        payload.get("value"),
+    )
+
+
+def _format_group_url_helper(payload: dict) -> str:
+    return "group_slug={0}".format(payload.get("group_slug"))
+
+
+def _format_workshop_url_helper(payload: dict) -> str:
+    return "published_file_id={0}".format(payload.get("published_file_id"))
+
+
+def _format_market_url_helper(payload: dict) -> str:
+    return "app_id={0} hash={1}".format(
+        payload.get("app_id"),
+        _safe_console_text(payload.get("market_hash_name")),
+    )
 
 
 def _format_player_achievement_summary(payload: dict) -> str:
