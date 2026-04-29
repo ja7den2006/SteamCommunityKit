@@ -141,6 +141,12 @@ class SteamClient:
             **kwargs,
         )
 
+    def find_owned_game_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.find_owned_game(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
     def get_recently_played_games_for_user(self, identifier, url_type=None, **kwargs) -> dict:
         return self.players.get_recently_played_games(
             self.resolve_steam_id(identifier, url_type=url_type),
@@ -149,6 +155,12 @@ class SteamClient:
 
     def get_recently_played_games_summary_for_user(self, identifier, url_type=None, **kwargs) -> dict:
         return self.players.get_recently_played_games_summary(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            **kwargs,
+        )
+
+    def find_recently_played_game_for_user(self, identifier, url_type=None, **kwargs) -> dict:
+        return self.players.find_recently_played_game(
             self.resolve_steam_id(identifier, url_type=url_type),
             **kwargs,
         )
@@ -260,6 +272,24 @@ class SteamClient:
 
     def get_global_achievement_percentages_map(self, app_id) -> dict:
         return self.user_stats.get_global_achievement_percentages_map(app_id)
+
+    def get_schema_for_game_summary(self, app_id, *, language: Optional[str] = None) -> dict:
+        return self.user_stats.get_schema_for_game_summary(app_id, language=language)
+
+    def get_global_stats_for_game_summary(
+        self,
+        app_id,
+        names,
+        *,
+        start_date: Optional[int] = None,
+        end_date: Optional[int] = None,
+    ) -> dict:
+        return self.user_stats.get_global_stats_for_game_summary(
+            app_id,
+            names,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     def get_player_achievements_summary_for_user(
         self,
@@ -403,6 +433,58 @@ class SteamClient:
             country=country,
             language=language,
             currency=currency,
+        )
+
+    def get_all_market_item_listings_summary(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        return self.market.get_all_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+
+    def find_market_item_listings(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+        max_price=None,
+    ) -> dict:
+        return self.market.find_item_listings(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+            max_price=max_price,
         )
 
     def search_all_market_items(

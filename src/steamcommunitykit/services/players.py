@@ -145,3 +145,62 @@ class PlayersService:
             },
             "raw": payload,
         }
+
+    def find_owned_game(
+        self,
+        steam_id,
+        *,
+        app_id=None,
+        name_query: Optional[str] = None,
+        include_appinfo: bool = True,
+        include_played_free_games: bool = False,
+        appids_filter: Optional[List[int]] = None,
+        language: Optional[str] = None,
+    ) -> dict:
+        payload = self.get_owned_games_summary(
+            steam_id,
+            include_appinfo=include_appinfo,
+            include_played_free_games=include_played_free_games,
+            appids_filter=appids_filter,
+            language=language,
+        )
+        query = (name_query or "").strip().lower()
+        target_app_id = validate_app_id(app_id) if app_id is not None else None
+        matches = []
+        for game in payload.get("games", []):
+            if target_app_id is not None and game.get("app_id") != target_app_id:
+                continue
+            if query and query not in (game.get("name") or "").lower():
+                continue
+            matches.append(game)
+        return {
+            "steamid": payload.get("steamid"),
+            "count": len(matches),
+            "games": matches,
+            "raw": payload,
+        }
+
+    def find_recently_played_game(
+        self,
+        steam_id,
+        *,
+        app_id=None,
+        name_query: Optional[str] = None,
+        count: int = 0,
+    ) -> dict:
+        payload = self.get_recently_played_games_summary(steam_id, count=count)
+        query = (name_query or "").strip().lower()
+        target_app_id = validate_app_id(app_id) if app_id is not None else None
+        matches = []
+        for game in payload.get("games", []):
+            if target_app_id is not None and game.get("app_id") != target_app_id:
+                continue
+            if query and query not in (game.get("name") or "").lower():
+                continue
+            matches.append(game)
+        return {
+            "steamid": payload.get("steamid"),
+            "count": len(matches),
+            "games": matches,
+            "raw": payload,
+        }

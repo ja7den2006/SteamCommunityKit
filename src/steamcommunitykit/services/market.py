@@ -282,6 +282,121 @@ class MarketService:
             "raw": payload,
         }
 
+    def get_all_item_listings_summary(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        current_start = validate_uint32(start, "start", allow_zero=True)
+        page_limit = None if max_pages is None else validate_uint32(max_pages, "max_pages")
+        listing_limit = None if max_listings is None else validate_uint32(max_listings, "max_listings")
+        page_count = 0
+        pages = []
+        listings = []
+        seen_listing_ids = set()
+        total_count = None
+        assets = {}
+
+        while True:
+            page = self.get_item_listings_summary(
+                app_id,
+                market_hash_name,
+                start=current_start,
+                count=count,
+                country=country,
+                language=language,
+                currency=currency,
+            )
+            pages.append(page)
+            page_count += 1
+            total_count = page.get("total_count", total_count)
+            assets.update(page.get("assets", {}))
+
+            page_listings = page.get("listings", [])
+            for listing in page_listings:
+                listing_id = listing.get("listing_id")
+                if listing_id and listing_id in seen_listing_ids:
+                    continue
+                if listing_id:
+                    seen_listing_ids.add(listing_id)
+                listings.append(listing)
+                if listing_limit is not None and len(listings) >= listing_limit:
+                    listings = listings[:listing_limit]
+                    break
+
+            if listing_limit is not None and len(listings) >= listing_limit:
+                break
+            if page_limit is not None and page_count >= page_limit:
+                break
+
+            page_size = page.get("pagesize", len(page_listings)) or len(page_listings)
+            if page_size <= 0 or not page_listings:
+                break
+
+            current_start += page_size
+            if total_count is not None and current_start >= int(total_count):
+                break
+
+        cheapest = listings[0] if listings else None
+        return {
+            "success": pages[-1].get("success") if pages else True,
+            "start": start,
+            "pages_fetched": page_count,
+            "total_count": total_count if total_count is not None else len(listings),
+            "listings": listings,
+            "assets": assets,
+            "cheapest_listing": cheapest,
+            "pages": pages,
+            "raw": pages[-1].get("raw") if pages else {},
+        }
+
+    def find_item_listings(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+        max_price=None,
+    ) -> dict:
+        payload = self.get_all_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+        matches = []
+        ceiling = None if max_price is None else int(max_price)
+        for listing in payload.get("listings", []):
+            price = listing.get("converted_price") or listing.get("price")
+            if ceiling is not None and (price is None or int(price) > ceiling):
+                continue
+            matches.append(listing)
+        return {
+            "count": len(matches),
+            "listings": matches,
+            "pages_fetched": payload.get("pages_fetched", 0),
+            "raw": payload,
+        }
+
     def get_item_listings_page_html(self, app_id, market_hash_name: str) -> str:
         return self.transport.request(
             "GET",

@@ -148,6 +148,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Find Owned Game",
+        lambda: _format_found_games(
+            client.find_owned_game_for_user(args.profile_identifier, app_id=args.app_id, include_appinfo=True)
+        ),
+    )
+    run_check(
         "Get Recently Played Games",
         lambda: _format_optional_count(
             client.get_recently_played_games_for_user(args.profile_identifier),
@@ -158,6 +164,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         "Get Recently Played Games Summary",
         lambda: _format_game_summary(
             client.get_recently_played_games_summary_for_user(args.profile_identifier)
+        ),
+    )
+    run_check(
+        "Find Recently Played Game",
+        lambda: _format_found_games(
+            client.find_recently_played_game_for_user(args.profile_identifier, app_id=args.app_id)
         ),
     )
     run_check(
@@ -227,6 +239,10 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Schema For Game Summary",
+        lambda: _format_schema_summary(client.get_schema_for_game_summary(args.app_id)),
+    )
+    run_check(
         "Get Global Stats For Game",
         lambda: "globalstats_keys={0}".format(
             sorted(
@@ -234,6 +250,15 @@ def run_public_suite(client: SteamClient, args) -> None:
                     args.app_id,
                     ["total_kills"],
                 ).keys()
+            )
+        ),
+    )
+    run_check(
+        "Get Global Stats For Game Summary",
+        lambda: _format_global_stats_summary(
+            client.get_global_stats_for_game_summary(
+                args.app_id,
+                ["total_kills"],
             )
         ),
     )
@@ -479,6 +504,31 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
                 args.market_app_id,
                 args.market_hash_name,
                 count=10,
+            )
+        ),
+    )
+    run_check(
+        "Market Listings Multi-Page",
+        lambda: _format_market_listings_summary(
+            client.get_all_market_item_listings_summary(
+                args.market_app_id,
+                args.market_hash_name,
+                count=10,
+                max_pages=2,
+                max_listings=15,
+            )
+        ),
+    )
+    run_check(
+        "Find Market Listings",
+        lambda: _format_found_market_listings(
+            client.find_market_item_listings(
+                args.market_app_id,
+                args.market_hash_name,
+                count=10,
+                max_pages=2,
+                max_listings=15,
+                max_price=5000,
             )
         ),
     )
@@ -757,6 +807,12 @@ def _format_game_summary(payload: dict) -> str:
     return "count={0} first={1}".format(count, first_name)
 
 
+def _format_found_games(payload: dict) -> str:
+    games = payload.get("games", [])
+    first_name = games[0].get("name") if games and games[0].get("name") else "<none>"
+    return "matches={0} first={1}".format(payload.get("count"), first_name)
+
+
 def _format_app_details_many(payload: list) -> str:
     first_name = payload[0].get("name") if payload else "<none>"
     return "apps={0} first={1}".format(len(payload), first_name)
@@ -766,6 +822,24 @@ def _format_global_achievement_map(payload: dict) -> str:
     achievements = payload.get("achievements", [])
     first_name = achievements[0].get("name") if achievements else "<none>"
     return "achievements={0} first={1}".format(payload.get("achievement_count"), first_name)
+
+
+def _format_schema_summary(payload: dict) -> str:
+    return "game={0} achievements={1} stats={2}".format(
+        payload.get("game_name", "<unknown>"),
+        payload.get("achievement_count"),
+        payload.get("stat_count"),
+    )
+
+
+def _format_global_stats_summary(payload: dict) -> str:
+    stats = payload.get("stats", [])
+    first = stats[0] if stats else {}
+    return "stats={0} first={1} value={2}".format(
+        len(stats),
+        first.get("name"),
+        first.get("value"),
+    )
 
 
 def _format_group_member_summaries(payload: dict) -> str:
@@ -789,6 +863,18 @@ def _format_market_listings_summary(payload: dict) -> str:
         len(payload.get("listings", [])),
         payload.get("total_count"),
         cheapest_price,
+    )
+
+
+def _format_found_market_listings(payload: dict) -> str:
+    listings = payload.get("listings", [])
+    first_price = None
+    if listings:
+        first_price = listings[0].get("converted_price") or listings[0].get("price")
+    return "matches={0} first_price={1} pages={2}".format(
+        payload.get("count"),
+        first_price,
+        payload.get("pages_fetched", 0),
     )
 
 

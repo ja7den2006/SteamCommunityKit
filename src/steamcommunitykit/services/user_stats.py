@@ -75,6 +75,53 @@ class UserStatsService:
             require_api_key=True,
         )
 
+    def get_schema_for_game_summary(self, app_id, language: Optional[str] = None) -> dict:
+        payload = self.get_schema_for_game(app_id, language=language)
+        game = payload.get("game", {})
+        available_game_stats = game.get("availableGameStats", {})
+        achievements = available_game_stats.get("achievements", []) or []
+        stats = available_game_stats.get("stats", []) or []
+        normalized_achievements = []
+        achievements_map = {}
+        for entry in achievements:
+            item = {
+                "api_name": entry.get("name"),
+                "display_name": entry.get("displayName"),
+                "description": entry.get("description"),
+                "default_value": entry.get("defaultvalue"),
+                "hidden": entry.get("hidden"),
+                "icon": entry.get("icon"),
+                "icongray": entry.get("icongray"),
+                "raw": entry,
+            }
+            normalized_achievements.append(item)
+            if item.get("api_name"):
+                achievements_map[item["api_name"]] = item
+        normalized_stats = []
+        stats_map = {}
+        for entry in stats:
+            item = {
+                "api_name": entry.get("name"),
+                "display_name": entry.get("displayName"),
+                "default_value": entry.get("defaultvalue"),
+                "raw": entry,
+            }
+            normalized_stats.append(item)
+            if item.get("api_name"):
+                stats_map[item["api_name"]] = item
+        return {
+            "app_id": validate_app_id(app_id),
+            "game_name": game.get("gameName"),
+            "game_version": game.get("gameVersion"),
+            "achievement_count": len(normalized_achievements),
+            "achievements": normalized_achievements,
+            "achievements_map": achievements_map,
+            "stat_count": len(normalized_stats),
+            "stats": normalized_stats,
+            "stats_map": stats_map,
+            "raw": payload,
+        }
+
     def get_user_stats_for_game(self, steam_id, app_id) -> dict:
         return self.transport.request(
             "GET",
@@ -110,6 +157,40 @@ class UserStatsService:
             params=params,
             require_api_key=True,
         )
+
+    def get_global_stats_for_game_summary(
+        self,
+        app_id,
+        names: List[str],
+        *,
+        start_date: Optional[int] = None,
+        end_date: Optional[int] = None,
+    ) -> dict:
+        payload = self.get_global_stats_for_game(
+            app_id,
+            names,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        result = payload.get("result", {}) if isinstance(payload.get("result"), dict) else {}
+        global_stats = result.get("globalstats", {}) if isinstance(result.get("globalstats"), dict) else {}
+        normalized = []
+        stats_map = {}
+        for name in names:
+            item = {
+                "name": name,
+                "value": global_stats.get(name),
+            }
+            normalized.append(item)
+            stats_map[name] = item
+        return {
+            "app_id": validate_app_id(app_id),
+            "stats": normalized,
+            "stats_map": stats_map,
+            "error": payload.get("error"),
+            "result": result,
+            "raw": payload,
+        }
 
     def get_player_achievements_summary(
         self, steam_id, app_id, language: Optional[str] = None

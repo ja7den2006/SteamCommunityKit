@@ -1318,6 +1318,52 @@ def test_players_get_recently_played_games_summary_normalizes_games() -> None:
     client.close()
 
 
+def test_players_find_owned_game_filters_by_app_id() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "game_count": 2,
+                    "games": [
+                        {"appid": 570, "name": "Dota 2"},
+                        {"appid": 730, "name": "Counter-Strike 2"},
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.find_owned_game_for_user("76561197960434622", app_id=730, include_appinfo=True)
+
+    assert result["count"] == 1
+    assert result["games"][0]["name"] == "Counter-Strike 2"
+    client.close()
+
+
+def test_players_find_recently_played_game_filters_by_name() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "total_count": 2,
+                    "games": [
+                        {"appid": 570, "name": "Dota 2"},
+                        {"appid": 730, "name": "Counter-Strike 2"},
+                    ],
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.find_recently_played_game_for_user("76561197960434622", name_query="counter")
+
+    assert result["count"] == 1
+    assert result["games"][0]["app_id"] == 730
+    client.close()
+
+
 def test_inventory_service_uses_community_inventory_endpoint() -> None:
     session = RecordingSession(DummyResponse(json_data={"assets": [], "descriptions": [], "total_inventory_count": 0}))
     client = SteamClient(session=session)
@@ -1791,6 +1837,71 @@ def test_market_get_item_listings_summary_normalizes_assets_and_cheapest_listing
     assert len(result["listings"]) == 2
     assert result["cheapest_listing"]["listing_id"] == "1"
     assert result["assets"]["1001"]["market_hash_name"] == "AK-47 | Example"
+    client.close()
+
+
+def test_market_get_all_item_listings_summary_paginates_and_deduplicates() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "success": 1,
+                    "total_count": 3,
+                    "start": 0,
+                    "pagesize": 2,
+                    "assets": {"730": {"2": {"1001": {"id": "1001", "market_hash_name": "One"}}}},
+                    "listinginfo": {
+                        "1": {"price": 100, "converted_price": 100, "asset": {"id": "1001"}},
+                        "2": {"price": 110, "converted_price": 110, "asset": {"id": "1001"}},
+                    },
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "success": 1,
+                    "total_count": 3,
+                    "start": 2,
+                    "pagesize": 1,
+                    "assets": {"730": {"2": {"1002": {"id": "1002", "market_hash_name": "Two"}}}},
+                    "listinginfo": {
+                        "3": {"price": 120, "converted_price": 120, "asset": {"id": "1002"}},
+                    },
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_all_market_item_listings_summary(730, "AK-47 | Example", count=2, max_pages=2)
+
+    assert result["pages_fetched"] == 2
+    assert len(result["listings"]) == 3
+    assert result["assets"]["1002"]["market_hash_name"] == "Two"
+    client.close()
+
+
+def test_market_find_item_listings_filters_by_max_price() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": 1,
+                "total_count": 2,
+                "start": 0,
+                "pagesize": 2,
+                "assets": {"730": {"2": {"1001": {"id": "1001"}, "1002": {"id": "1002"}}}},
+                "listinginfo": {
+                    "1": {"price": 100, "converted_price": 100, "asset": {"id": "1001"}},
+                    "2": {"price": 600, "converted_price": 600, "asset": {"id": "1002"}},
+                },
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.find_market_item_listings(730, "AK-47 | Example", max_price=500)
+
+    assert result["count"] == 1
+    assert result["listings"][0]["listing_id"] == "1"
     client.close()
 
 
@@ -2624,6 +2735,58 @@ def test_user_stats_global_achievement_percentages_map_normalizes_entries() -> N
 
     assert result["achievement_count"] == 1
     assert result["achievements_map"]["FIRST_BLOOD"]["percent"] == 12.5
+    client.close()
+
+
+def test_user_stats_schema_for_game_summary_normalizes_achievements_and_stats() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "game": {
+                    "gameName": "Dota 2",
+                    "gameVersion": "1",
+                    "availableGameStats": {
+                        "achievements": [
+                            {"name": "WIN_ONE", "displayName": "Winner", "description": "Win one game", "hidden": 0}
+                        ],
+                        "stats": [
+                            {"name": "total_kills", "displayName": "Total Kills", "defaultvalue": 0}
+                        ],
+                    },
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_schema_for_game_summary(570)
+
+    assert result["game_name"] == "Dota 2"
+    assert result["achievement_count"] == 1
+    assert result["achievements_map"]["WIN_ONE"]["display_name"] == "Winner"
+    assert result["stats_map"]["total_kills"]["display_name"] == "Total Kills"
+    client.close()
+
+
+def test_user_stats_global_stats_for_game_summary_maps_requested_names() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "result": {
+                    "globalstats": {
+                        "total_kills": 12345,
+                    }
+                }
+            }
+        )
+    )
+    client = SteamClient(api_key="test", session=session)
+
+    result = client.get_global_stats_for_game_summary(570, ["total_kills"])
+
+    assert result["stats"][0]["name"] == "total_kills"
+    assert result["stats"][0]["value"] == 12345
+    assert result["stats_map"]["total_kills"]["value"] == 12345
     client.close()
 
 
