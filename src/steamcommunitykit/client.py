@@ -288,6 +288,12 @@ class SteamClient:
     def get_collection_details(self, published_file_ids) -> dict:
         return self.remote_storage.get_collection_details_summary(published_file_ids)
 
+    def get_collection_details_map(self, published_file_ids) -> dict:
+        return self.remote_storage.get_collection_details_summary(published_file_ids).get(
+            "collections_by_id",
+            {},
+        )
+
     def get_collection_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_detail(published_file_id)
 
@@ -779,6 +785,13 @@ class SteamClient:
     def get_market_item_name_id(self, app_id, market_hash_name: str) -> int:
         return self.market.get_item_name_id(app_id, market_hash_name)
 
+    def get_market_item_name_id_by_url(self, market_url: str) -> int:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_item_name_id(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+        )
+
     def get_market_item_orders_histogram(
         self,
         *,
@@ -800,6 +813,25 @@ class SteamClient:
             two_factor=two_factor,
         )
 
+    def get_market_item_orders_histogram_by_url(
+        self,
+        market_url: str,
+        *,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        two_factor: int = 0,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_item_orders_histogram(
+            app_id=parsed["app_id"],
+            market_hash_name=parsed["market_hash_name"],
+            country=country,
+            language=language,
+            currency=currency,
+            two_factor=two_factor,
+        )
+
     def get_market_item_orders_summary(
         self,
         *,
@@ -815,6 +847,25 @@ class SteamClient:
             item_name_id=item_name_id,
             app_id=app_id,
             market_hash_name=market_hash_name,
+            country=country,
+            language=language,
+            currency=currency,
+            two_factor=two_factor,
+        )
+
+    def get_market_item_orders_summary_by_url(
+        self,
+        market_url: str,
+        *,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        two_factor: int = 0,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_item_orders_summary(
+            app_id=parsed["app_id"],
+            market_hash_name=parsed["market_hash_name"],
             country=country,
             language=language,
             currency=currency,
@@ -946,6 +997,31 @@ class SteamClient:
             max_listings=max_listings,
         )
 
+    def get_all_market_item_listings_summary_by_url(
+        self,
+        market_url: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_all_market_item_listings_summary(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+
     def find_market_item_listings(
         self,
         app_id,
@@ -963,6 +1039,33 @@ class SteamClient:
         return self.market.find_item_listings(
             app_id,
             market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+            max_price=max_price,
+        )
+
+    def find_market_item_listings_by_url(
+        self,
+        market_url: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+        max_price=None,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.find_market_item_listings(
+            parsed["app_id"],
+            parsed["market_hash_name"],
             start=start,
             count=count,
             country=country,

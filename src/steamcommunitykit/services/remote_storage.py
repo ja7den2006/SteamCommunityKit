@@ -127,9 +127,15 @@ class RemoteStorageService:
         payload = self.get_collection_details(published_file_ids)
         details = payload.get("collectiondetails", [])
         normalized = [self.normalize_collection_detail(detail) for detail in details]
+        collections_by_id = {
+            str(detail["published_file_id"]): detail
+            for detail in normalized
+            if detail.get("published_file_id")
+        }
         return {
             "collections": normalized,
             "collection_ids": [detail.get("published_file_id") for detail in normalized if detail.get("published_file_id")],
+            "collections_by_id": collections_by_id,
             "raw": payload,
         }
 

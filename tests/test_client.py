@@ -1214,6 +1214,31 @@ def test_client_get_collection_details_returns_normalized_bulk_summary() -> None
     client.close()
 
 
+def test_remote_storage_get_collection_details_map_indexes_collections() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "response": {
+                    "collectiondetails": [
+                        {
+                            "publishedfileid": "2682416130",
+                            "result": 1,
+                            "childcount": 2,
+                            "children": [{"publishedfileid": "111"}],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_collection_details_map(["2682416130"])
+
+    assert result["2682416130"]["child_count"] == 2
+    client.close()
+
+
 def test_remote_storage_get_collection_child_details_expands_children() -> None:
     session = SequenceSession(
         [
@@ -2662,6 +2687,47 @@ def test_client_market_helpers_accept_listing_url() -> None:
     client.market.get_price_history_summary = original_get_price_history_summary
     client.market.get_market_price_snapshot = original_get_market_price_snapshot
     client.market.get_item_listings_summary = original_get_item_listings_summary
+    client.close()
+
+
+def test_client_more_market_url_helpers_delegate_correctly() -> None:
+    client = SteamClient()
+
+    original_get_item_name_id = client.market.get_item_name_id
+    original_get_item_orders_histogram = client.market.get_item_orders_histogram
+    original_get_item_orders_summary = client.market.get_item_orders_summary
+    original_get_all_item_listings_summary = client.market.get_all_item_listings_summary
+    original_find_item_listings = client.market.find_item_listings
+
+    client.market.get_item_name_id = lambda app_id, market_hash_name: 7178002
+    client.market.get_item_orders_histogram = lambda **kwargs: {"kind": "histogram", "kwargs": kwargs}
+    client.market.get_item_orders_summary = lambda **kwargs: {"kind": "summary", "kwargs": kwargs}
+    client.market.get_all_item_listings_summary = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "all_listings",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+    client.market.find_item_listings = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "find_listings",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+
+    market_url = "https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Example"
+
+    assert client.get_market_item_name_id_by_url(market_url) == 7178002
+    assert client.get_market_item_orders_histogram_by_url(market_url)["kind"] == "histogram"
+    assert client.get_market_item_orders_summary_by_url(market_url)["kind"] == "summary"
+    assert client.get_all_market_item_listings_summary_by_url(market_url)["kind"] == "all_listings"
+    assert client.find_market_item_listings_by_url(market_url, max_price=500)["kind"] == "find_listings"
+
+    client.market.get_item_name_id = original_get_item_name_id
+    client.market.get_item_orders_histogram = original_get_item_orders_histogram
+    client.market.get_item_orders_summary = original_get_item_orders_summary
+    client.market.get_all_item_listings_summary = original_get_all_item_listings_summary
+    client.market.find_item_listings = original_find_item_listings
     client.close()
 
 

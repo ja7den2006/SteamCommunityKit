@@ -407,6 +407,12 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: _format_collection_details(client.get_collection_details([args.collection_published_file_id])),
     )
     run_check(
+        "Get Collection Details Map",
+        lambda: _format_collection_details_map(
+            client.get_collection_details_map([args.collection_published_file_id])
+        ),
+    )
+    run_check(
         "Get Collection Detail",
         lambda: _format_collection_detail(client.get_collection_detail(args.collection_published_file_id)),
     )
@@ -576,11 +582,11 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         "Find Market Item",
         lambda: _format_market_find(
             client.find_market_item(
-                args.market_query,
+                args.market_hash_name,
                 app_id=args.market_app_id,
-                count=10,
-                max_pages=2,
-                max_results=20,
+                count=20,
+                max_pages=5,
+                max_results=100,
                 market_hash_name=args.market_hash_name,
             )
         ),
@@ -611,11 +617,27 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Orders Histogram By URL",
+        lambda: "success={0}".format(
+            client.get_market_item_orders_histogram_by_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name)
+            ).get("success")
+        ),
+    )
+    run_check(
         "Market Orders Summary",
         lambda: _format_market_orders_summary(
             client.get_market_item_orders_summary(
                 app_id=args.market_app_id,
                 market_hash_name=args.market_hash_name,
+            )
+        ),
+    )
+    run_check(
+        "Market Orders Summary By URL",
+        lambda: _format_market_orders_summary(
+            client.get_market_item_orders_summary_by_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name)
             )
         ),
     )
@@ -661,11 +683,34 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Listings Multi-Page By URL",
+        lambda: _format_market_listings_summary(
+            client.get_all_market_item_listings_summary_by_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name),
+                count=10,
+                max_pages=2,
+                max_listings=15,
+            )
+        ),
+    )
+    run_check(
         "Find Market Listings",
         lambda: _format_found_market_listings(
             client.find_market_item_listings(
                 args.market_app_id,
                 args.market_hash_name,
+                count=10,
+                max_pages=2,
+                max_listings=15,
+                max_price=5000,
+            )
+        ),
+    )
+    run_check(
+        "Find Market Listings By URL",
+        lambda: _format_found_market_listings(
+            client.find_market_item_listings_by_url(
+                build_market_listing_url(args.market_app_id, args.market_hash_name),
                 count=10,
                 max_pages=2,
                 max_listings=15,
@@ -1275,6 +1320,11 @@ def _format_collection_details(payload: dict) -> str:
         len(collections),
         first_id,
     )
+
+
+def _format_collection_details_map(payload: dict) -> str:
+    first_id = next(iter(payload), "<none>")
+    return "collections={0} first={1}".format(len(payload), first_id)
 
 
 def _format_collection_detail(payload: dict) -> str:
