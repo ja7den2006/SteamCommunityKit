@@ -6,6 +6,7 @@ from typing import Callable, Optional, Union
 import requests
 
 from steamcommunitykit.constants import DEFAULT_TIMEOUT
+from steamcommunitykit.exceptions import SteamValidationError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.models import CommunityCredentials, CredentialLoginResult
 from steamcommunitykit.services import (
@@ -71,6 +72,14 @@ class SteamClient:
     @property
     def api_key(self) -> Optional[str]:
         return self._transport.api_key
+
+    @property
+    def session(self) -> requests.Session:
+        return self._transport.session
+
+    @property
+    def timeout(self) -> float:
+        return self._transport.timeout
 
     def set_api_key(self, api_key: str) -> None:
         self._transport.api_key = api_key
@@ -1768,6 +1777,21 @@ class SteamClient:
         self.set_community_credentials(credentials)
         return credentials
 
+    def set_community_credentials_from_cookie_mapping(self, cookies: dict) -> CommunityCredentials:
+        credentials = self.auth.community_credentials_from_cookie_mapping(cookies)
+        self.set_community_credentials(credentials)
+        return credentials
+
+    def set_community_credentials_from_bundle(self, bundle: dict) -> CommunityCredentials:
+        credentials = self.auth.community_credentials_from_bundle(bundle)
+        self.set_community_credentials(credentials)
+        return credentials
+
+    def set_community_credentials_from_bundle_json(self, bundle_json: str) -> CommunityCredentials:
+        credentials = self.auth.community_credentials_from_bundle_json(bundle_json)
+        self.set_community_credentials(credentials)
+        return credentials
+
     def login_to_community_with_refresh_token(self, refresh_token: str) -> CommunityCredentials:
         credentials = self.auth.community_credentials_from_refresh_token(refresh_token)
         self.set_community_credentials(credentials)
@@ -1775,6 +1799,57 @@ class SteamClient:
 
     def export_community_cookie_string(self) -> str:
         return self.auth.export_cookie_string(self._transport.require_community_credentials())
+
+    def export_community_cookie_mapping(self) -> dict:
+        return self.auth.export_cookie_mapping(self._transport.require_community_credentials())
+
+    def export_community_session_bundle(self) -> dict:
+        return self.auth.export_credentials_bundle(self._transport.require_community_credentials())
+
+    def export_community_session_bundle_json(self, *, indent: Optional[int] = None) -> str:
+        return self.auth.export_credentials_bundle_json(
+            self._transport.require_community_credentials(),
+            indent=indent,
+        )
+
+    def export_community_refresh_token(self) -> str:
+        credentials = self._transport.require_community_credentials()
+        if not credentials.refresh_token:
+            raise SteamValidationError("Current community credentials do not include a refresh token.")
+        return credentials.refresh_token
+
+    def get_community_session_state(self) -> dict:
+        credentials = self._transport.community_credentials
+        if credentials is None:
+            return {
+                "logged_in": False,
+                "steam_id": None,
+                "session_id_present": False,
+                "has_access_token": False,
+                "has_refresh_token": False,
+                "has_steam_login_secure": False,
+            }
+        return {
+            "logged_in": True,
+            "steam_id": credentials.steam_id,
+            "session_id_present": bool(credentials.session_id),
+            "has_access_token": bool(credentials.access_token),
+            "has_refresh_token": bool(credentials.refresh_token),
+            "has_steam_login_secure": bool(credentials.steam_login_secure or credentials.access_token),
+        }
+
+    def build_community_requests_session(
+        self,
+        session: Optional[requests.Session] = None,
+    ) -> requests.Session:
+        resolved_session = session or requests.Session()
+        user_agent = self._transport.session.headers.get("User-Agent")
+        if user_agent and "User-Agent" not in resolved_session.headers:
+            resolved_session.headers["User-Agent"] = user_agent
+        return self.auth.apply_community_credentials_to_session(
+            resolved_session,
+            self._transport.require_community_credentials(),
+        )
 
     def get_community_profile_bundle(self, steam_id=None) -> dict:
         return self.community.get_profile_bundle(steam_id)

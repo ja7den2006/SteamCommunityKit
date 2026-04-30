@@ -825,6 +825,10 @@ def run_community_suite(client: SteamClient, args) -> None:
         lambda: _format_web_api_key_page_state(client.get_web_api_key_page_state()),
     )
     run_check(
+        "Get Community Session State",
+        lambda: _format_community_session_state(client.get_community_session_state()),
+    )
+    run_check(
         "Fetch Group ID64",
         lambda: str(client.get_group_id64(args.group_url)),
     )
@@ -866,6 +870,26 @@ def run_community_suite(client: SteamClient, args) -> None:
     run_check(
         "Community Cookie Export/Import Roundtrip",
         lambda: _format_cookie_roundtrip(client, args),
+    )
+    run_check(
+        "Community Cookie Mapping Roundtrip",
+        lambda: _format_cookie_mapping_roundtrip(client, args),
+    )
+    run_check(
+        "Community Session Bundle Roundtrip",
+        lambda: _format_bundle_roundtrip(client, args),
+    )
+    run_check(
+        "Community Session Bundle JSON Roundtrip",
+        lambda: _format_bundle_json_roundtrip(client, args),
+    )
+    run_check(
+        "Export Community Refresh Token",
+        lambda: _format_refresh_token_export(client),
+    )
+    run_check(
+        "Build Community Requests Session",
+        lambda: _format_built_requests_session(client),
     )
     run_check(
         "Get Own Inventory Items",
@@ -1552,6 +1576,16 @@ def _format_web_api_key_page_state(payload: dict) -> str:
     )
 
 
+def _format_community_session_state(payload: dict) -> str:
+    return "logged_in={0} steamid={1} refresh={2} access={3} cookie={4}".format(
+        payload.get("logged_in"),
+        payload.get("steam_id"),
+        payload.get("has_refresh_token"),
+        payload.get("has_access_token"),
+        payload.get("has_steam_login_secure"),
+    )
+
+
 def _safe_console_text(value) -> str:
     text = str(value)
     return text.encode("cp1252", errors="replace").decode("cp1252")
@@ -1585,6 +1619,74 @@ def _format_cookie_roundtrip(client: SteamClient, args) -> str:
         )
     finally:
         roundtrip_client.close()
+
+
+def _format_cookie_mapping_roundtrip(client: SteamClient, args) -> str:
+    cookie_mapping = client.export_community_cookie_mapping()
+    roundtrip_client = build_client(args)
+    try:
+        roundtrip_client.set_community_credentials_from_cookie_mapping(cookie_mapping)
+        state = roundtrip_client.get_community_session_state()
+        return "steamid={0} logged_in={1} keys={2}".format(
+            state.get("steam_id", "<unknown>"),
+            state.get("logged_in", False),
+            ",".join(sorted(cookie_mapping.keys())),
+        )
+    finally:
+        roundtrip_client.close()
+
+
+def _format_bundle_roundtrip(client: SteamClient, args) -> str:
+    bundle = client.export_community_session_bundle()
+    roundtrip_client = build_client(args)
+    try:
+        roundtrip_client.set_community_credentials_from_bundle(bundle)
+        state = roundtrip_client.get_community_session_state()
+        return "steamid={0} logged_in={1} refresh={2}".format(
+            state.get("steam_id", "<unknown>"),
+            state.get("logged_in", False),
+            state.get("has_refresh_token", False),
+        )
+    finally:
+        roundtrip_client.close()
+
+
+def _format_bundle_json_roundtrip(client: SteamClient, args) -> str:
+    bundle_json = client.export_community_session_bundle_json()
+    roundtrip_client = build_client(args)
+    try:
+        roundtrip_client.set_community_credentials_from_bundle_json(bundle_json)
+        state = roundtrip_client.get_community_session_state()
+        return "steamid={0} logged_in={1} json_length={2}".format(
+            state.get("steam_id", "<unknown>"),
+            state.get("logged_in", False),
+            len(bundle_json),
+        )
+    finally:
+        roundtrip_client.close()
+
+
+def _format_refresh_token_export(client: SteamClient) -> str:
+    token = client.export_community_refresh_token()
+    return "present={0} length={1}".format(bool(token), len(token))
+
+
+def _format_built_requests_session(client: SteamClient) -> str:
+    state = client.get_community_session_state()
+    session = client.build_community_requests_session()
+    try:
+        response = session.get(
+            "https://steamcommunity.com/profiles/{0}/edit/".format(state.get("steam_id")),
+            timeout=client.timeout,
+        )
+        has_profile_data = 'data-profile-edit="' in response.text and 'data-userinfo="' in response.text
+        return "cookies={0} status={1} profile_data={2}".format(
+            len(session.cookies),
+            response.status_code,
+            has_profile_data,
+        )
+    finally:
+        session.close()
 
 
 def _capture_result(cache: dict, key: str, fetcher, formatter=str) -> str:

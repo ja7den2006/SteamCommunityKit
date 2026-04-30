@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import json
 import time
 import urllib.parse
+from collections.abc import Mapping
 from typing import Callable, Optional
 
 import jwt
+import requests
 import rsa
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL, QR_IMAGE_BASE_URL, WEB_API_BASE_URL
@@ -370,23 +373,141 @@ class AuthenticationService:
 
     def community_credentials_from_cookie_string(self, cookie_string: str) -> CommunityCredentials:
         cookies = parse_cookie_string(cookie_string)
+        return self.community_credentials_from_cookie_mapping(cookies)
+
+    def community_credentials_from_cookie_mapping(
+        self,
+        cookies: Mapping[str, str],
+    ) -> CommunityCredentials:
+        if not isinstance(cookies, Mapping):
+            raise SteamAuthenticationError("community cookies must be a mapping.", status_code=400)
         session_id = cookies.get("sessionid")
         steam_login_secure = cookies.get("steamLoginSecure")
         if not session_id:
-            raise RuntimeError("cookie_string must contain a sessionid cookie.")
+            raise RuntimeError("community cookies must contain a sessionid cookie.")
         if not steam_login_secure:
-            raise RuntimeError("cookie_string must contain a steamLoginSecure cookie.")
+            raise RuntimeError("community cookies must contain a steamLoginSecure cookie.")
         return CommunityCredentials.from_cookie_pair(
             session_id=session_id,
             steam_login_secure=steam_login_secure,
         )
 
+    def community_credentials_from_bundle(self, bundle: dict) -> CommunityCredentials:
+        if not isinstance(bundle, dict):
+            raise SteamAuthenticationError("community bundle must be a dictionary.", status_code=400)
+
+        session_id = bundle.get("session_id") or bundle.get("sessionid")
+        steam_login_secure = bundle.get("steam_login_secure") or bundle.get("steamLoginSecure")
+        refresh_token = bundle.get("refresh_token")
+        access_token = bundle.get("access_token")
+        steam_id = bundle.get("steam_id") or bundle.get("steamid")
+
+        if steam_login_secure and session_id:
+            credentials = CommunityCredentials.from_cookie_pair(
+                session_id=str(session_id),
+                steam_login_secure=str(steam_login_secure),
+            )
+            if steam_id is not None and str(steam_id) != credentials.steam_id:
+                raise SteamAuthenticationError(
+                    "community bundle steam_id does not match steamLoginSecure.",
+                    status_code=400,
+                )
+            credentials.refresh_token = str(refresh_token) if refresh_token else None
+            if access_token:
+                credentials.access_token = str(access_token)
+            return credentials
+
+        if refresh_token:
+            return self.community_credentials_from_refresh_token(
+                str(refresh_token),
+                session_id=str(session_id) if session_id else None,
+            )
+
+        if session_id and steam_id and access_token:
+            return CommunityCredentials(
+                steam_id=validate_steam_id(steam_id, "steam_id"),
+                session_id=ensure_not_blank(str(session_id), "session_id"),
+                access_token=ensure_not_blank(str(access_token), "access_token"),
+                refresh_token=str(refresh_token) if refresh_token else None,
+            )
+
+        raise SteamAuthenticationError(
+            "community bundle must include either session_id + steamLoginSecure, refresh_token, or session_id + steam_id + access_token.",
+            status_code=400,
+        )
+
+    def community_credentials_from_bundle_json(self, bundle_json: str) -> CommunityCredentials:
+        try:
+            bundle = json.loads(ensure_not_blank(bundle_json, "bundle_json"))
+        except json.JSONDecodeError as exc:
+            raise SteamAuthenticationError(
+                "community bundle JSON is not valid JSON.",
+                status_code=400,
+            ) from exc
+        return self.community_credentials_from_bundle(bundle)
+
     @staticmethod
     def export_cookie_string(credentials: CommunityCredentials) -> str:
+        cookies = AuthenticationService.export_cookie_mapping(credentials)
         return "sessionid={0}; steamLoginSecure={1}".format(
-            credentials.session_id,
-            credentials.steam_login_secure_value,
+            cookies["sessionid"],
+            cookies["steamLoginSecure"],
         )
+
+    @staticmethod
+    def export_cookie_mapping(credentials: CommunityCredentials) -> dict:
+        return {
+            "sessionid": credentials.session_id,
+            "steamLoginSecure": credentials.steam_login_secure_value,
+        }
+
+    @staticmethod
+    def export_credentials_bundle(credentials: CommunityCredentials) -> dict:
+        bundle = {
+            "steam_id": credentials.steam_id,
+            "session_id": credentials.session_id,
+            "has_access_token": bool(credentials.access_token),
+            "has_refresh_token": bool(credentials.refresh_token),
+            "has_steam_login_secure": bool(credentials.steam_login_secure or credentials.access_token),
+        }
+        if credentials.access_token:
+            bundle["access_token"] = credentials.access_token
+        if credentials.refresh_token:
+            bundle["refresh_token"] = credentials.refresh_token
+        if credentials.steam_login_secure:
+            bundle["steam_login_secure"] = credentials.steam_login_secure
+        return bundle
+
+    @staticmethod
+    def export_credentials_bundle_json(
+        credentials: CommunityCredentials,
+        *,
+        indent: Optional[int] = None,
+    ) -> str:
+        return json.dumps(
+            AuthenticationService.export_credentials_bundle(credentials),
+            indent=indent,
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def apply_community_credentials_to_session(
+        session: requests.Session,
+        credentials: CommunityCredentials,
+    ) -> requests.Session:
+        session.cookies.set(
+            "sessionid",
+            credentials.session_id,
+            domain=".steamcommunity.com",
+            path="/",
+        )
+        session.cookies.set(
+            "steamLoginSecure",
+            credentials.steam_login_secure_value,
+            domain=".steamcommunity.com",
+            path="/",
+        )
+        return session
 
     @staticmethod
     def decode_jwt(token: str) -> dict:

@@ -1730,6 +1730,161 @@ def test_client_can_export_community_cookie_string() -> None:
     client.close()
 
 
+def test_client_can_set_community_credentials_from_cookie_mapping() -> None:
+    client = SteamClient(api_key="test")
+
+    credentials = client.set_community_credentials_from_cookie_mapping(
+        {
+            "sessionid": "session123",
+            "steamLoginSecure": "76561197960435530%7C%7Ctoken123",
+        }
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    assert credentials.access_token == "token123"
+    assert client._transport.community_credentials == credentials
+    client.close()
+
+
+def test_client_can_export_community_cookie_mapping() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    cookies = client.export_community_cookie_mapping()
+
+    assert cookies == {
+        "sessionid": "session123",
+        "steamLoginSecure": "76561197960435530%7C%7Ctoken123",
+    }
+    client.close()
+
+
+def test_client_can_export_and_restore_community_session_bundle() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            access_token="access123",
+            refresh_token="refresh123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    bundle = client.export_community_session_bundle()
+
+    restored_client = SteamClient(api_key="test")
+    restored = restored_client.set_community_credentials_from_bundle(bundle)
+
+    assert bundle["steam_id"] == "76561197960435530"
+    assert bundle["has_refresh_token"] is True
+    assert restored.refresh_token == "refresh123"
+    assert restored_client._transport.community_credentials == restored
+    client.close()
+    restored_client.close()
+
+
+def test_client_can_export_and_restore_community_session_bundle_json() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            access_token="access123",
+            refresh_token="refresh123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    bundle_json = client.export_community_session_bundle_json(indent=2)
+
+    restored_client = SteamClient(api_key="test")
+    restored = restored_client.set_community_credentials_from_bundle_json(bundle_json)
+
+    assert '"steam_id": "76561197960435530"' in bundle_json
+    assert restored.refresh_token == "refresh123"
+    assert restored_client._transport.community_credentials == restored
+    client.close()
+    restored_client.close()
+
+
+def test_client_can_export_community_refresh_token() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            refresh_token="refresh123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    assert client.export_community_refresh_token() == "refresh123"
+    client.close()
+
+
+def test_client_get_community_session_state_reports_presence_flags() -> None:
+    client = SteamClient(api_key="test")
+
+    empty_state = client.get_community_session_state()
+    assert empty_state["logged_in"] is False
+
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            access_token="access123",
+            refresh_token="refresh123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+    logged_in_state = client.get_community_session_state()
+
+    assert logged_in_state["logged_in"] is True
+    assert logged_in_state["has_access_token"] is True
+    assert logged_in_state["has_refresh_token"] is True
+    assert logged_in_state["has_steam_login_secure"] is True
+    client.close()
+
+
+def test_client_can_build_community_requests_session() -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    session = client.build_community_requests_session()
+
+    cookies = {
+        cookie.name: cookie.value
+        for cookie in session.cookies
+        if cookie.domain == ".steamcommunity.com"
+    }
+    assert cookies["sessionid"] == "session123"
+    assert cookies["steamLoginSecure"] == "76561197960435530%7C%7Ctoken123"
+    assert session.headers["User-Agent"] == client.session.headers["User-Agent"]
+    session.close()
+    client.close()
+
+
+def test_client_exposes_timeout_property() -> None:
+    client = SteamClient(api_key="test", timeout=42.0)
+
+    assert client.timeout == 42.0
+    client.close()
+
+
 def test_client_can_login_with_refresh_token() -> None:
     client = SteamClient(api_key="test")
     expected_credentials = CommunityCredentials(
@@ -3411,6 +3566,131 @@ def test_auth_can_build_community_credentials_from_refresh_token() -> None:
     assert credentials.session_id == "session123"
     assert credentials.refresh_token == "refresh123"
     assert credentials.steam_login_secure == "76561197960435530%7C%7Ctoken123"
+    client.close()
+
+
+def test_auth_can_build_community_credentials_from_cookie_mapping() -> None:
+    client = SteamClient(api_key="test")
+
+    credentials = client.auth.community_credentials_from_cookie_mapping(
+        {
+            "sessionid": "session123",
+            "steamLoginSecure": "76561197960435530%7C%7Ctoken123",
+        }
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.access_token == "token123"
+    client.close()
+
+
+def test_auth_can_build_community_credentials_from_bundle_cookie_path() -> None:
+    client = SteamClient(api_key="test")
+
+    credentials = client.auth.community_credentials_from_bundle(
+        {
+            "steam_id": "76561197960435530",
+            "session_id": "session123",
+            "steam_login_secure": "76561197960435530%7C%7Ctoken123",
+            "refresh_token": "refresh123",
+        }
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    assert credentials.access_token == "token123"
+    assert credentials.refresh_token == "refresh123"
+    client.close()
+
+
+def test_auth_can_build_community_credentials_from_bundle_refresh_path() -> None:
+    client = SteamClient(api_key="test")
+    expected = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        refresh_token="refresh123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    original_method = client.auth.community_credentials_from_refresh_token
+    client.auth.community_credentials_from_refresh_token = lambda refresh_token, session_id=None: expected
+
+    credentials = client.auth.community_credentials_from_bundle({"refresh_token": "refresh123"})
+
+    client.auth.community_credentials_from_refresh_token = original_method
+
+    assert credentials == expected
+    client.close()
+
+
+def test_auth_can_export_community_credentials_bundle() -> None:
+    client = SteamClient(api_key="test")
+    credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        access_token="access123",
+        refresh_token="refresh123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    bundle = client.auth.export_credentials_bundle(credentials)
+
+    assert bundle["steam_id"] == "76561197960435530"
+    assert bundle["has_access_token"] is True
+    assert bundle["has_refresh_token"] is True
+    assert bundle["has_steam_login_secure"] is True
+    assert bundle["refresh_token"] == "refresh123"
+    client.close()
+
+
+def test_auth_can_build_community_credentials_from_bundle_json() -> None:
+    client = SteamClient(api_key="test")
+
+    credentials = client.auth.community_credentials_from_bundle_json(
+        '{"steam_id":"76561197960435530","session_id":"session123","steam_login_secure":"76561197960435530%7C%7Ctoken123"}'
+    )
+
+    assert credentials.steam_id == "76561197960435530"
+    assert credentials.session_id == "session123"
+    client.close()
+
+
+def test_auth_can_export_cookie_mapping_and_bundle_json() -> None:
+    client = SteamClient(api_key="test")
+    credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        access_token="access123",
+        refresh_token="refresh123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    cookies = client.auth.export_cookie_mapping(credentials)
+    bundle_json = client.auth.export_credentials_bundle_json(credentials)
+
+    assert cookies["sessionid"] == "session123"
+    assert cookies["steamLoginSecure"] == "76561197960435530%7C%7Ctoken123"
+    assert '"steam_id": "76561197960435530"' in bundle_json
+    client.close()
+
+
+def test_auth_can_apply_community_credentials_to_session() -> None:
+    client = SteamClient(api_key="test")
+    credentials = CommunityCredentials(
+        steam_id="76561197960435530",
+        session_id="session123",
+        steam_login_secure="76561197960435530%7C%7Ctoken123",
+    )
+
+    session = client.auth.apply_community_credentials_to_session(client.session, credentials)
+    cookies = {
+        cookie.name: cookie.value
+        for cookie in session.cookies
+        if cookie.domain == ".steamcommunity.com"
+    }
+
+    assert cookies["sessionid"] == "session123"
+    assert cookies["steamLoginSecure"] == "76561197960435530%7C%7Ctoken123"
     client.close()
 
 
