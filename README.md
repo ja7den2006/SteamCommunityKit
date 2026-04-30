@@ -11,11 +11,13 @@ This package is built around the workflows normal users can actually use. It doe
 
 ## Install
 
+Install from GitHub:
+
 ```bash
-pip install SteamCommunityKit
+pip install git+https://github.com/ja7den2006/SteamCommunityKit.git
 ```
 
-For local development:
+Install from a local checkout:
 
 ```bash
 pip install -e .[dev]
@@ -162,6 +164,7 @@ print(snapshot["listing_summary"]["listing_count"])
 
 ## Documentation
 
+- [Installation Guide](docs/installation.md)
 - [Authentication Guide](docs/authentication.md)
 - [Community Guide](docs/community.md)
 - [Groups Guide](docs/groups.md)
@@ -202,4 +205,3 @@ python examples/smoke_test.py --username YOUR_USERNAME --password YOUR_PASSWORD 
 ## Disclaimer
 
 This project is not affiliated with Valve or Steam. Steam pages and response shapes can change over time, so some community-backed helpers may need maintenance if Steam updates its HTML or request flows.
-
