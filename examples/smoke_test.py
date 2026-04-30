@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -860,6 +861,10 @@ def run_community_suite(client: SteamClient, args) -> None:
         "Get Group Member Summaries Map",
         lambda: _format_group_member_summaries_map(client.get_group_member_summaries_map(args.group_url, limit=5)),
     )
+    run_check(
+        "Get Group Membership State",
+        lambda: _format_group_membership_state(client.get_group_membership_state(args.group_url)),
+    )
     if client.api_key:
         run_check(
             "Get Friend Bans",
@@ -876,12 +881,20 @@ def run_community_suite(client: SteamClient, args) -> None:
         lambda: _format_cookie_mapping_roundtrip(client, args),
     )
     run_check(
+        "Community Cookie File Roundtrip",
+        lambda: _format_cookie_file_roundtrip(client, args),
+    )
+    run_check(
         "Community Session Bundle Roundtrip",
         lambda: _format_bundle_roundtrip(client, args),
     )
     run_check(
         "Community Session Bundle JSON Roundtrip",
         lambda: _format_bundle_json_roundtrip(client, args),
+    )
+    run_check(
+        "Community Session Bundle File Roundtrip",
+        lambda: _format_bundle_file_roundtrip(client, args),
     )
     run_check(
         "Export Community Refresh Token",
@@ -1246,6 +1259,15 @@ def _format_group_member_summaries_map(payload: dict) -> str:
         len(members_by_steam_id),
         first_id,
         first_name,
+    )
+
+
+def _format_group_membership_state(payload: dict) -> str:
+    return "state={0} can_join={1} can_leave={2} group_id={3}".format(
+        payload.get("membership_state"),
+        payload.get("can_join"),
+        payload.get("can_leave"),
+        payload.get("group_id", "<none>"),
     )
 
 
@@ -1636,6 +1658,23 @@ def _format_cookie_mapping_roundtrip(client: SteamClient, args) -> str:
         roundtrip_client.close()
 
 
+def _format_cookie_file_roundtrip(client: SteamClient, args) -> str:
+    with tempfile.TemporaryDirectory(prefix="sckit-cookie-") as temp_dir:
+        cookie_path = Path(temp_dir) / "community_cookie.txt"
+        client.save_community_cookie_string(cookie_path)
+        roundtrip_client = build_client(args)
+        try:
+            roundtrip_client.load_community_cookie_string(cookie_path)
+            state = roundtrip_client.get_community_session_state()
+            return "steamid={0} logged_in={1} path={2}".format(
+                state.get("steam_id", "<unknown>"),
+                state.get("logged_in", False),
+                cookie_path.name,
+            )
+        finally:
+            roundtrip_client.close()
+
+
 def _format_bundle_roundtrip(client: SteamClient, args) -> str:
     bundle = client.export_community_session_bundle()
     roundtrip_client = build_client(args)
@@ -1649,6 +1688,23 @@ def _format_bundle_roundtrip(client: SteamClient, args) -> str:
         )
     finally:
         roundtrip_client.close()
+
+
+def _format_bundle_file_roundtrip(client: SteamClient, args) -> str:
+    with tempfile.TemporaryDirectory(prefix="sckit-bundle-") as temp_dir:
+        bundle_path = Path(temp_dir) / "community_bundle.json"
+        client.save_community_session_bundle(bundle_path)
+        roundtrip_client = build_client(args)
+        try:
+            roundtrip_client.load_community_session_bundle(bundle_path)
+            state = roundtrip_client.get_community_session_state()
+            return "steamid={0} logged_in={1} path={2}".format(
+                state.get("steam_id", "<unknown>"),
+                state.get("logged_in", False),
+                bundle_path.name,
+            )
+        finally:
+            roundtrip_client.close()
 
 
 def _format_bundle_json_roundtrip(client: SteamClient, args) -> str:

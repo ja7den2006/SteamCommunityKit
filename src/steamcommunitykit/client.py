@@ -238,6 +238,9 @@ class SteamClient:
     def get_group_id(self, group_url: str) -> str:
         return self.groups.fetch_group_id(group_url)
 
+    def get_group_membership_state(self, group_url: str) -> dict:
+        return self.groups.get_group_membership_state(group_url)
+
     def check_group_name_availability(self, name: str):
         return self.groups.check_name_availability(name)
 
@@ -1782,6 +1785,10 @@ class SteamClient:
         self.set_community_credentials(credentials)
         return credentials
 
+    def load_community_cookie_string(self, path: Union[str, Path]) -> CommunityCredentials:
+        cookie_string = Path(path).read_text(encoding="utf-8")
+        return self.set_community_credentials_from_cookie_string(cookie_string)
+
     def set_community_credentials_from_bundle(self, bundle: dict) -> CommunityCredentials:
         credentials = self.auth.community_credentials_from_bundle(bundle)
         self.set_community_credentials(credentials)
@@ -1791,6 +1798,10 @@ class SteamClient:
         credentials = self.auth.community_credentials_from_bundle_json(bundle_json)
         self.set_community_credentials(credentials)
         return credentials
+
+    def load_community_session_bundle(self, path: Union[str, Path]) -> CommunityCredentials:
+        bundle_json = Path(path).read_text(encoding="utf-8")
+        return self.set_community_credentials_from_bundle_json(bundle_json)
 
     def login_to_community_with_refresh_token(self, refresh_token: str) -> CommunityCredentials:
         credentials = self.auth.community_credentials_from_refresh_token(refresh_token)
@@ -1803,6 +1814,12 @@ class SteamClient:
     def export_community_cookie_mapping(self) -> dict:
         return self.auth.export_cookie_mapping(self._transport.require_community_credentials())
 
+    def save_community_cookie_string(self, path: Union[str, Path]) -> Path:
+        resolved_path = Path(path)
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_path.write_text(self.export_community_cookie_string(), encoding="utf-8")
+        return resolved_path
+
     def export_community_session_bundle(self) -> dict:
         return self.auth.export_credentials_bundle(self._transport.require_community_credentials())
 
@@ -1811,6 +1828,15 @@ class SteamClient:
             self._transport.require_community_credentials(),
             indent=indent,
         )
+
+    def save_community_session_bundle(self, path: Union[str, Path], *, indent: Optional[int] = 2) -> Path:
+        resolved_path = Path(path)
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_path.write_text(
+            self.export_community_session_bundle_json(indent=indent),
+            encoding="utf-8",
+        )
+        return resolved_path
 
     def export_community_refresh_token(self) -> str:
         credentials = self._transport.require_community_credentials()

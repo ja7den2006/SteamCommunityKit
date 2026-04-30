@@ -1766,6 +1766,27 @@ def test_client_can_export_community_cookie_mapping() -> None:
     client.close()
 
 
+def test_client_can_save_and_load_community_cookie_file(tmp_path) -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    path = client.save_community_cookie_string(tmp_path / "session" / "community_cookie.txt")
+
+    restored_client = SteamClient(api_key="test")
+    restored = restored_client.load_community_cookie_string(path)
+
+    assert path.read_text(encoding="utf-8") == "sessionid=session123; steamLoginSecure=76561197960435530%7C%7Ctoken123"
+    assert restored.steam_id == "76561197960435530"
+    client.close()
+    restored_client.close()
+
+
 def test_client_can_export_and_restore_community_session_bundle() -> None:
     client = SteamClient(api_key="test")
     client.set_community_credentials(
@@ -1787,6 +1808,29 @@ def test_client_can_export_and_restore_community_session_bundle() -> None:
     assert bundle["has_refresh_token"] is True
     assert restored.refresh_token == "refresh123"
     assert restored_client._transport.community_credentials == restored
+    client.close()
+    restored_client.close()
+
+
+def test_client_can_save_and_load_community_session_bundle_file(tmp_path) -> None:
+    client = SteamClient(api_key="test")
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            access_token="access123",
+            refresh_token="refresh123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    path = client.save_community_session_bundle(tmp_path / "session" / "community_bundle.json")
+
+    restored_client = SteamClient(api_key="test")
+    restored = restored_client.load_community_session_bundle(path)
+
+    assert '"steam_id": "76561197960435530"' in path.read_text(encoding="utf-8")
+    assert restored.refresh_token == "refresh123"
     client.close()
     restored_client.close()
 
@@ -1974,6 +2018,61 @@ def test_players_get_recently_played_games_summary_normalizes_games() -> None:
     assert result["total_count"] == 1
     assert result["games"][0]["app_id"] == 730
     assert result["games_map"][730]["playtime_2weeks"] == 120
+    client.close()
+
+
+def test_groups_membership_state_parses_join_form() -> None:
+    html = """
+    <form name="join_group_form" id="join_group_form" method="POST" action="https://steamcommunity.com/groups/SteamDB">
+        <input type="hidden" name="action" value="join">
+        <input type="hidden" name="sessionID" value="session123">
+    </form>
+    <div class="grouppage_join_area">
+        <span>Join Group</span>
+    </div>
+    """
+    client = SteamClient(session=RecordingSession(DummyResponse(text=html)))
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    result = client.get_group_membership_state("SteamDB")
+
+    assert result["membership_state"] == "not_member"
+    assert result["can_join"] is True
+    assert result["can_leave"] is False
+    assert result["join_action_url"] == "https://steamcommunity.com/groups/SteamDB"
+    client.close()
+
+
+def test_groups_membership_state_parses_leave_form() -> None:
+    html = """
+    <form method="POST" id="leave_group_form" action="https://steamcommunity.com/profiles/76561197960435530/home_process">
+        <input type="hidden" name="sessionID" value="session123">
+        <input type="hidden" name="action" value="leaveGroup">
+        <input type="hidden" name="groupId" value="103582791429521412">
+    </form>
+    """
+    client = SteamClient(session=RecordingSession(DummyResponse(text=html)))
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="76561197960435530%7C%7Ctoken123",
+        )
+    )
+
+    result = client.get_group_membership_state("Valve")
+
+    assert result["membership_state"] == "member"
+    assert result["is_member"] is True
+    assert result["can_join"] is False
+    assert result["can_leave"] is True
+    assert result["group_id"] == "103582791429521412"
     client.close()
 
 

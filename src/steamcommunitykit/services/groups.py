@@ -143,6 +143,62 @@ class GroupsService:
         group_id = tail.split("<div class=\"formRowFields\">", 1)[1].split("</div>", 1)[0]
         return group_id.strip()
 
+    def get_group_membership_state(self, group_url: str) -> dict:
+        normalized_group_url = self._normalize_group_url_value(group_url)
+        response_text = self.transport.request(
+            "GET",
+            f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}",
+            cookies=self._community_cookies(),
+            expected="text",
+        )
+        state = self._parse_group_membership_state(response_text)
+        state["group_url"] = normalized_group_url
+        state["group_link"] = f"{COMMUNITY_BASE_URL}/groups/{normalized_group_url}/"
+        return state
+
+    @staticmethod
+    def _parse_group_membership_state(html_text: str) -> dict:
+        join_form_match = re.search(
+            r'<form name="join_group_form" id="join_group_form" method="POST" action="([^"]+)">.*?'
+            r'name="action" value="join".*?name="sessionID" value="([^"]+)"',
+            html_text,
+            re.S | re.I,
+        )
+        leave_form_match = re.search(
+            r'<form method="POST" id="leave_group_form" action="([^"]+)">.*?'
+            r'name="sessionID" value="([^"]+)".*?name="action" value="leaveGroup".*?'
+            r'name="groupId" value="([^"]+)"',
+            html_text,
+            re.S | re.I,
+        )
+        can_join = bool(re.search(r"<span>\s*Join Group\s*</span>", html_text, re.I))
+        can_leave = leave_form_match is not None
+        if can_leave and not can_join:
+            membership_state = "member"
+        elif can_join:
+            membership_state = "not_member"
+        else:
+            membership_state = "unknown"
+
+        payload = {
+            "membership_state": membership_state,
+            "is_member": membership_state == "member",
+            "can_join": can_join,
+            "can_leave": can_leave,
+            "join_action_url": None,
+            "leave_action_url": None,
+            "session_id": None,
+            "group_id": None,
+        }
+        if join_form_match:
+            payload["join_action_url"] = html.unescape(join_form_match.group(1))
+            payload["session_id"] = join_form_match.group(2)
+        if leave_form_match:
+            payload["leave_action_url"] = html.unescape(leave_form_match.group(1))
+            payload["session_id"] = leave_form_match.group(2)
+            payload["group_id"] = leave_form_match.group(3)
+        return payload
+
     def get_group_details(self, group_url: str, page: int = 1) -> dict:
         normalized_group_url = self._normalize_group_url_value(group_url)
         response_text = self.transport.request(
