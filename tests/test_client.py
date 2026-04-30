@@ -11,6 +11,7 @@ from steamcommunitykit import (
     SteamValidationError,
     account_id_to_steam_id,
     build_group_url,
+    build_inventory_url,
     build_market_listing_url,
     build_steam_profile_url,
     build_trade_offer_url,
@@ -18,6 +19,7 @@ from steamcommunitykit import (
     normalize_group_slug,
     normalize_published_file_id,
     parse_group_url,
+    parse_inventory_url,
     parse_market_listing_url,
     parse_steam_profile_url,
     parse_trade_offer_url,
@@ -344,6 +346,17 @@ def test_workshop_url_helpers_build_and_parse() -> None:
     assert workshop_url == "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
     assert parsed["published_file_id"] == "3210489689"
     assert parsed["workshop_url"] == workshop_url
+
+
+def test_inventory_url_helpers_build_and_parse() -> None:
+    inventory_url = build_inventory_url("76561197960435530", 753, 6)
+    parsed = parse_inventory_url(inventory_url)
+
+    assert inventory_url == "https://steamcommunity.com/inventory/76561197960435530/753/6"
+    assert parsed["steam_id"] == "76561197960435530"
+    assert parsed["app_id"] == 753
+    assert parsed["context_id"] == "6"
+    assert parsed["inventory_url"] == inventory_url
 
 
 def test_market_listing_url_helpers_build_and_parse() -> None:
@@ -1099,6 +1112,21 @@ def test_remote_storage_get_published_file_detail_accepts_workshop_url() -> None
     client.close()
 
 
+def test_client_get_published_file_detail_by_url_delegates() -> None:
+    client = SteamClient()
+
+    original_get_published_file_detail = client.remote_storage.get_published_file_detail
+    client.remote_storage.get_published_file_detail = lambda value: {"published_file_id": normalize_published_file_id(value)}
+
+    result = client.get_published_file_detail_by_url(
+        "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
+    )
+
+    assert result["published_file_id"] == "3210489689"
+    client.remote_storage.get_published_file_detail = original_get_published_file_detail
+    client.close()
+
+
 def test_remote_storage_get_published_file_details_summary_normalizes_and_maps_items() -> None:
     session = RecordingSession(
         DummyResponse(
@@ -1308,6 +1336,36 @@ def test_remote_storage_get_collection_detail_accepts_workshop_url() -> None:
 
     assert result["published_file_id"] == "3210489689"
     assert session.calls[0]["data"]["publishedfileids[0]"] == "3210489689"
+    client.close()
+
+
+def test_client_collection_url_helpers_delegate() -> None:
+    client = SteamClient()
+
+    original_get_collection_detail = client.remote_storage.get_collection_detail
+    original_get_collection_child_details = client.remote_storage.get_collection_child_details
+    original_get_collection_child_map = client.remote_storage.get_collection_child_map
+    original_find_collection_child = client.remote_storage.find_collection_child
+
+    client.remote_storage.get_collection_detail = lambda value: {"published_file_id": normalize_published_file_id(value)}
+    client.remote_storage.get_collection_child_details = lambda value: {"collection": {"published_file_id": normalize_published_file_id(value)}}
+    client.remote_storage.get_collection_child_map = lambda value: {"collection": {"published_file_id": normalize_published_file_id(value)}}
+    client.remote_storage.find_collection_child = lambda value, **kwargs: {
+        "collection": {"published_file_id": normalize_published_file_id(value)},
+        "kwargs": kwargs,
+    }
+
+    workshop_url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3210489689"
+
+    assert client.get_collection_detail_by_url(workshop_url)["published_file_id"] == "3210489689"
+    assert client.get_collection_child_details_by_url(workshop_url)["collection"]["published_file_id"] == "3210489689"
+    assert client.get_collection_child_map_by_url(workshop_url)["collection"]["published_file_id"] == "3210489689"
+    assert client.find_collection_child_by_url(workshop_url, title="Example")["collection"]["published_file_id"] == "3210489689"
+
+    client.remote_storage.get_collection_detail = original_get_collection_detail
+    client.remote_storage.get_collection_child_details = original_get_collection_child_details
+    client.remote_storage.get_collection_child_map = original_get_collection_child_map
+    client.remote_storage.find_collection_child = original_find_collection_child
     client.close()
 
 
@@ -2728,6 +2786,57 @@ def test_client_more_market_url_helpers_delegate_correctly() -> None:
     client.market.get_item_orders_summary = original_get_item_orders_summary
     client.market.get_all_item_listings_summary = original_get_all_item_listings_summary
     client.market.find_item_listings = original_find_item_listings
+    client.close()
+
+
+def test_client_inventory_url_helpers_delegate_correctly() -> None:
+    client = SteamClient()
+
+    original_get_inventory = client.get_inventory_for_user
+    original_get_inventory_items = client.get_inventory_items_for_user
+    original_get_inventory_items_summary = client.get_inventory_items_summary_for_user
+    original_get_inventory_item_counts = client.get_inventory_item_counts_for_user
+    original_find_inventory_items = client.find_inventory_items_for_user
+    original_get_full_inventory = client.get_full_inventory_for_user
+    original_get_full_inventory_items = client.get_full_inventory_items_for_user
+    original_get_full_inventory_items_summary = client.get_full_inventory_items_summary_for_user
+    original_get_full_inventory_item_counts = client.get_full_inventory_item_counts_for_user
+    original_find_full_inventory_items = client.find_full_inventory_items_for_user
+
+    client.get_inventory_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory"}
+    client.get_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_items"}
+    client.get_inventory_items_summary_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_summary"}
+    client.get_inventory_item_counts_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_counts"}
+    client.find_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "find_inventory"}
+    client.get_full_inventory_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory"}
+    client.get_full_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_items"}
+    client.get_full_inventory_items_summary_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_summary"}
+    client.get_full_inventory_item_counts_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_counts"}
+    client.find_full_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "find_full_inventory"}
+
+    inventory_url = "https://steamcommunity.com/inventory/76561197960435530/753/6"
+
+    assert client.get_inventory_by_url(inventory_url)["kind"] == "inventory"
+    assert client.get_inventory_items_by_url(inventory_url)["kind"] == "inventory_items"
+    assert client.get_inventory_items_summary_by_url(inventory_url)["kind"] == "inventory_summary"
+    assert client.get_inventory_item_counts_by_url(inventory_url)["kind"] == "inventory_counts"
+    assert client.find_inventory_items_by_url(inventory_url)["kind"] == "find_inventory"
+    assert client.get_full_inventory_by_url(inventory_url)["kind"] == "full_inventory"
+    assert client.get_full_inventory_items_by_url(inventory_url)["kind"] == "full_inventory_items"
+    assert client.get_full_inventory_items_summary_by_url(inventory_url)["kind"] == "full_inventory_summary"
+    assert client.get_full_inventory_item_counts_by_url(inventory_url)["kind"] == "full_inventory_counts"
+    assert client.find_full_inventory_items_by_url(inventory_url)["kind"] == "find_full_inventory"
+
+    client.get_inventory_for_user = original_get_inventory
+    client.get_inventory_items_for_user = original_get_inventory_items
+    client.get_inventory_items_summary_for_user = original_get_inventory_items_summary
+    client.get_inventory_item_counts_for_user = original_get_inventory_item_counts
+    client.find_inventory_items_for_user = original_find_inventory_items
+    client.get_full_inventory_for_user = original_get_full_inventory
+    client.get_full_inventory_items_for_user = original_get_full_inventory_items
+    client.get_full_inventory_items_summary_for_user = original_get_full_inventory_items_summary
+    client.get_full_inventory_item_counts_for_user = original_get_full_inventory_item_counts
+    client.find_full_inventory_items_for_user = original_find_full_inventory_items
     client.close()
 
 

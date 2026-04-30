@@ -15,6 +15,7 @@ from steamcommunitykit import (  # noqa: E402
     SteamClient,
     SteamError,
     build_group_url,
+    build_inventory_url,
     build_market_listing_url,
     build_steam_profile_url,
     build_workshop_file_url,
@@ -395,9 +396,17 @@ def run_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Published File Details Map",
+        lambda: _format_published_file_details_map(
+            client.get_published_file_details_map(
+                [_require_workshop_item_id(workshop_cache, args), args.collection_published_file_id]
+            )
+        ),
+    )
+    run_check(
         "Get Published File Detail From URL",
         lambda: _format_published_file_detail(
-            client.get_published_file_detail(
+            client.get_published_file_detail_by_url(
                 build_workshop_file_url(_require_workshop_item_id(workshop_cache, args))
             )
         ),
@@ -417,8 +426,20 @@ def run_public_suite(client: SteamClient, args) -> None:
         lambda: _format_collection_detail(client.get_collection_detail(args.collection_published_file_id)),
     )
     run_check(
+        "Get Collection Detail From URL",
+        lambda: _format_collection_detail(
+            client.get_collection_detail_by_url(build_workshop_file_url(args.collection_published_file_id))
+        ),
+    )
+    run_check(
         "Get Collection Child Details",
         lambda: _format_collection_children(client.get_collection_child_details(args.collection_published_file_id)),
+    )
+    run_check(
+        "Get Collection Child Details From URL",
+        lambda: _format_collection_children(
+            client.get_collection_child_details_by_url(build_workshop_file_url(args.collection_published_file_id))
+        ),
     )
     run_check(
         "Get Collection Child Map",
@@ -836,6 +857,19 @@ def run_community_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Get Own Inventory Summary By URL",
+        lambda: _format_inventory_summary(
+            client.get_inventory_items_summary_by_url(
+                build_inventory_url(
+                    _require_cached(cache, "account_info").get("steamid"),
+                    args.inventory_app_id,
+                    args.inventory_context_id,
+                ),
+                count=args.inventory_count,
+            )
+        ),
+    )
+    run_check(
         "Get Own Inventory Item Counts",
         lambda: _format_inventory_counts(
             client.get_inventory_item_counts_for_user(
@@ -877,6 +911,20 @@ def run_community_suite(client: SteamClient, args) -> None:
                 _require_cached(cache, "account_info").get("steamid"),
                 args.inventory_app_id,
                 args.inventory_context_id,
+                count=args.inventory_count,
+                max_pages=2,
+            )
+        ),
+    )
+    run_check(
+        "Get Own Full Inventory Item Counts By URL",
+        lambda: _format_inventory_counts(
+            client.get_full_inventory_item_counts_by_url(
+                build_inventory_url(
+                    _require_cached(cache, "account_info").get("steamid"),
+                    args.inventory_app_id,
+                    args.inventory_context_id,
+                ),
                 count=args.inventory_count,
                 max_pages=2,
             )
@@ -1311,6 +1359,11 @@ def _format_published_file_details_batch(payload: dict) -> str:
         len(items),
         first_title,
     )
+
+
+def _format_published_file_details_map(payload: dict) -> str:
+    first_id = next(iter(payload), "<none>")
+    return "items={0} first={1}".format(len(payload), first_id)
 
 
 def _format_collection_details(payload: dict) -> str:

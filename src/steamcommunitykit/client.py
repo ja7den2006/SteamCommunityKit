@@ -25,7 +25,12 @@ from steamcommunitykit.services import (
     UsersService,
     WebAPIUtilService,
 )
-from steamcommunitykit.utils import load_api_key_from_json, parse_market_listing_url
+from steamcommunitykit.utils import (
+    load_api_key_from_json,
+    normalize_published_file_id,
+    parse_inventory_url,
+    parse_market_listing_url,
+)
 
 
 class SteamClient:
@@ -282,8 +287,17 @@ class SteamClient:
     def get_published_file_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_published_file_detail(published_file_id)
 
+    def get_published_file_detail_by_url(self, workshop_url: str) -> dict:
+        return self.get_published_file_detail(workshop_url)
+
     def get_published_file_details(self, published_file_ids) -> dict:
         return self.remote_storage.get_published_file_details_summary(published_file_ids)
+
+    def get_published_file_details_map(self, published_file_ids) -> dict:
+        return self.remote_storage.get_published_file_details_summary(published_file_ids).get(
+            "items_by_id",
+            {},
+        )
 
     def get_collection_details(self, published_file_ids) -> dict:
         return self.remote_storage.get_collection_details_summary(published_file_ids)
@@ -297,11 +311,20 @@ class SteamClient:
     def get_collection_detail(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_detail(published_file_id)
 
+    def get_collection_detail_by_url(self, workshop_url: str) -> dict:
+        return self.get_collection_detail(workshop_url)
+
     def get_collection_child_details(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_child_details(published_file_id)
 
+    def get_collection_child_details_by_url(self, workshop_url: str) -> dict:
+        return self.get_collection_child_details(workshop_url)
+
     def get_collection_child_map(self, published_file_id) -> dict:
         return self.remote_storage.get_collection_child_map(published_file_id)
+
+    def get_collection_child_map_by_url(self, workshop_url: str) -> dict:
+        return self.get_collection_child_map(workshop_url)
 
     def find_collection_child(
         self,
@@ -314,6 +337,23 @@ class SteamClient:
     ) -> dict:
         return self.remote_storage.find_collection_child(
             published_file_id,
+            child_published_file_id=child_published_file_id,
+            title=title,
+            exact=exact,
+            prefer_exact=prefer_exact,
+        )
+
+    def find_collection_child_by_url(
+        self,
+        workshop_url: str,
+        *,
+        child_published_file_id=None,
+        title=None,
+        exact: bool = False,
+        prefer_exact: bool = True,
+    ) -> dict:
+        return self.find_collection_child(
+            normalize_published_file_id(workshop_url),
             child_published_file_id=child_published_file_id,
             title=title,
             exact=exact,
@@ -623,6 +663,24 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def get_inventory_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_inventory_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
     def get_inventory_items_for_user(
         self,
         identifier,
@@ -638,6 +696,24 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
+    def get_inventory_items_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_inventory_items_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,
@@ -663,6 +739,24 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def get_inventory_items_summary_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_inventory_items_summary_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
     def get_inventory_item_counts_for_user(
         self,
         identifier,
@@ -678,6 +772,24 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
+    def get_inventory_item_counts_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_inventory_item_counts_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,
@@ -702,6 +814,32 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            name_query=name_query,
+            market_hash_name=market_hash_name,
+            tradable=tradable,
+            marketable=marketable,
+        )
+
+    def find_inventory_items_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.find_inventory_items_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,
@@ -1123,6 +1261,26 @@ class SteamClient:
             max_pages=max_pages,
         )
 
+    def get_full_inventory_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_full_inventory_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
     def get_full_inventory_items_for_user(
         self,
         identifier,
@@ -1139,6 +1297,26 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def get_full_inventory_items_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_full_inventory_items_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,
@@ -1167,6 +1345,26 @@ class SteamClient:
             max_pages=max_pages,
         )
 
+    def get_full_inventory_items_summary_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_full_inventory_items_summary_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
     def get_full_inventory_item_counts_for_user(
         self,
         identifier,
@@ -1183,6 +1381,26 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def get_full_inventory_item_counts_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_full_inventory_item_counts_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,
@@ -1209,6 +1427,34 @@ class SteamClient:
             self.resolve_steam_id(identifier, url_type=url_type),
             app_id,
             context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+            name_query=name_query,
+            market_hash_name=market_hash_name,
+            tradable=tradable,
+            marketable=marketable,
+        )
+
+    def find_full_inventory_items_by_url(
+        self,
+        inventory_url: str,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        name_query: Optional[str] = None,
+        market_hash_name: Optional[str] = None,
+        tradable: Optional[bool] = None,
+        marketable: Optional[bool] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.find_full_inventory_items_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
             language=language,
             count=count,
             start_asset_id=start_asset_id,

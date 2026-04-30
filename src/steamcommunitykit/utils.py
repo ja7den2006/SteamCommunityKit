@@ -332,6 +332,46 @@ def normalize_published_file_id(published_file_id_or_url: Union[str, int]) -> st
     return validate_uint64(normalized, "published_file_id")
 
 
+def build_inventory_url(
+    steam_id: Union[str, int],
+    app_id: Union[str, int],
+    context_id: Union[str, int],
+) -> str:
+    normalized_steam_id = validate_steam_id(steam_id, "steam_id")
+    normalized_app_id = validate_app_id(app_id, "app_id")
+    normalized_context_id = validate_uint64(context_id, "context_id")
+    return "https://steamcommunity.com/inventory/{0}/{1}/{2}".format(
+        normalized_steam_id,
+        normalized_app_id,
+        normalized_context_id,
+    )
+
+
+def parse_inventory_url(inventory_url: str) -> Dict[str, Union[str, int]]:
+    normalized = ensure_not_blank(inventory_url, "inventory_url")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise SteamValidationError("inventory_url must be an http or https URL.")
+    if parsed.netloc.lower() not in STEAMCOMMUNITY_HOSTS:
+        raise SteamValidationError("inventory_url must point to steamcommunity.com.")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 4 or parts[0].lower() != "inventory":
+        raise SteamValidationError(
+            "inventory_url must use /inventory/<steamid>/<app_id>/<context_id>."
+        )
+
+    steam_id = validate_steam_id(parts[1], "steam_id")
+    app_id = validate_app_id(parts[2], "app_id")
+    context_id = validate_uint64(parts[3], "context_id")
+    return {
+        "steam_id": steam_id,
+        "app_id": app_id,
+        "context_id": context_id,
+        "inventory_url": build_inventory_url(steam_id, app_id, context_id),
+    }
+
+
 def build_market_listing_url(app_id: Union[str, int], market_hash_name: str) -> str:
     normalized_app_id = validate_app_id(app_id, "app_id")
     normalized_hash_name = ensure_not_blank(market_hash_name, "market_hash_name")
