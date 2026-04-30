@@ -1982,6 +1982,39 @@ def test_inventory_items_summary_normalizes_items_and_maps_asset_ids() -> None:
     client.close()
 
 
+def test_inventory_get_item_by_asset_id_returns_matching_item() -> None:
+    payload = {
+        "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"}],
+        "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "Example Item", "name": "Example Item"}],
+        "total_inventory_count": 1,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_inventory_item_by_asset_id("76561197960435530", 730, 2, "1")
+
+    assert result["asset_id"] == "1"
+    assert result["market_hash_name"] == "Example Item"
+    client.close()
+
+
+def test_inventory_get_item_by_asset_id_raises_not_found_when_missing() -> None:
+    payload = {
+        "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "amount": "1", "appid": 730, "contextid": "2"}],
+        "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "Example Item", "name": "Example Item"}],
+        "total_inventory_count": 1,
+        "more_items": False,
+    }
+    session = RecordingSession(DummyResponse(json_data=payload))
+    client = SteamClient(session=session)
+
+    with pytest.raises(SteamNotFoundError):
+        client.inventory.get_inventory_item_by_asset_id("76561197960435530", 730, 2, "2")
+
+    client.close()
+
+
 def test_inventory_item_counts_aggregates_by_market_hash_name() -> None:
     payload = {
         "assets": [
@@ -2066,6 +2099,37 @@ def test_inventory_full_items_summary_normalizes_paginated_inventory() -> None:
     assert result["pages_fetched"] == 2
     assert len(result["items"]) == 2
     assert result["items_by_asset_id"]["2"]["market_hash_name"] == "Two"
+    client.close()
+
+
+def test_inventory_get_full_item_by_asset_id_returns_matching_item() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "1", "classid": "10", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "10", "instanceid": "0", "market_hash_name": "One", "name": "One"}],
+                    "total_inventory_count": 2,
+                    "more_items": True,
+                    "last_assetid": "1",
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "assets": [{"assetid": "2", "classid": "11", "instanceid": "0", "appid": 730, "contextid": "2"}],
+                    "descriptions": [{"classid": "11", "instanceid": "0", "market_hash_name": "Two", "name": "Two"}],
+                    "total_inventory_count": 2,
+                    "more_items": False,
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.inventory.get_full_inventory_item_by_asset_id("76561197960435530", 730, 2, "2", max_pages=2)
+
+    assert result["asset_id"] == "2"
+    assert result["market_hash_name"] == "Two"
     client.close()
 
 
@@ -2461,6 +2525,36 @@ def test_market_get_item_listings_summary_normalizes_assets_and_cheapest_listing
     client.close()
 
 
+def test_market_get_item_listings_map_indexes_listings_by_id() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": True,
+                "total_count": 2,
+                "listinginfo": {
+                    "1": {"listingid": "1", "price": 450, "fee": 50, "asset": {"id": "1001"}},
+                    "2": {"listingid": "2", "price": 500, "fee": 50, "asset": {"id": "1002"}},
+                },
+                "assets": {
+                    "730": {
+                        "2": {
+                            "1001": {"id": "1001", "market_hash_name": "AK-47 | Example"},
+                            "1002": {"id": "1002", "market_hash_name": "AK-47 | Example"},
+                        }
+                    }
+                },
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_market_item_listings_map(730, "AK-47 | Example", count=2)
+
+    assert result["listings_by_id"]["1"]["asset_id"] == "1001"
+    assert result["listings_by_id"]["2"]["asset_id"] == "1002"
+    client.close()
+
+
 def test_market_get_all_item_listings_summary_paginates_and_deduplicates() -> None:
     session = SequenceSession(
         [
@@ -2501,6 +2595,43 @@ def test_market_get_all_item_listings_summary_paginates_and_deduplicates() -> No
     client.close()
 
 
+def test_market_get_all_item_listings_map_indexes_paginated_listings_by_id() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                json_data={
+                    "success": True,
+                    "total_count": 2,
+                    "start": 0,
+                    "pagesize": 1,
+                    "listinginfo": {
+                        "1": {"listingid": "1", "price": 450, "fee": 50, "asset": {"id": "1001"}}
+                    },
+                    "assets": {"730": {"2": {"1001": {"id": "1001", "market_hash_name": "One"}}}},
+                }
+            ),
+            DummyResponse(
+                json_data={
+                    "success": True,
+                    "total_count": 2,
+                    "start": 1,
+                    "pagesize": 1,
+                    "listinginfo": {
+                        "2": {"listingid": "2", "price": 500, "fee": 50, "asset": {"id": "1002"}}
+                    },
+                    "assets": {"730": {"2": {"1002": {"id": "1002", "market_hash_name": "Two"}}}},
+                }
+            ),
+        ]
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_all_market_item_listings_map(730, "AK-47 | Example", count=1, max_pages=2)
+
+    assert set(result["listings_by_id"]) == {"1", "2"}
+    client.close()
+
+
 def test_market_find_item_listings_filters_by_max_price() -> None:
     session = RecordingSession(
         DummyResponse(
@@ -2523,6 +2654,57 @@ def test_market_find_item_listings_filters_by_max_price() -> None:
 
     assert result["count"] == 1
     assert result["listings"][0]["listing_id"] == "1"
+    client.close()
+
+
+def test_market_get_listing_by_id_returns_matching_listing() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": True,
+                "total_count": 2,
+                "listinginfo": {
+                    "1": {"listingid": "1", "price": 450, "fee": 50, "asset": {"id": "1001"}},
+                    "2": {"listingid": "2", "price": 500, "fee": 50, "asset": {"id": "1002"}},
+                },
+                "assets": {
+                    "730": {
+                        "2": {
+                            "1001": {"id": "1001", "market_hash_name": "AK-47 | Example"},
+                            "1002": {"id": "1002", "market_hash_name": "AK-47 | Example"},
+                        }
+                    }
+                },
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    result = client.get_market_listing_by_id(730, "AK-47 | Example", "2")
+
+    assert result["listing_id"] == "2"
+    assert result["asset_id"] == "1002"
+    client.close()
+
+
+def test_market_get_all_listing_by_id_raises_not_found_when_missing() -> None:
+    session = RecordingSession(
+        DummyResponse(
+            json_data={
+                "success": True,
+                "total_count": 1,
+                "listinginfo": {
+                    "1": {"listingid": "1", "price": 450, "fee": 50, "asset": {"id": "1001"}}
+                },
+                "assets": {"730": {"2": {"1001": {"id": "1001", "market_hash_name": "AK-47 | Example"}}}},
+            }
+        )
+    )
+    client = SteamClient(session=session)
+
+    with pytest.raises(SteamNotFoundError):
+        client.market.get_all_listing_by_id(730, "AK-47 | Example", "999", max_pages=1)
+
     client.close()
 
 
@@ -2754,16 +2936,46 @@ def test_client_more_market_url_helpers_delegate_correctly() -> None:
     original_get_item_name_id = client.market.get_item_name_id
     original_get_item_orders_histogram = client.market.get_item_orders_histogram
     original_get_item_orders_summary = client.market.get_item_orders_summary
+    original_get_item_listings_map = client.market.get_item_listings_map
     original_get_all_item_listings_summary = client.market.get_all_item_listings_summary
+    original_get_all_item_listings_map = client.market.get_all_item_listings_map
+    original_get_listing_by_id = client.market.get_listing_by_id
+    original_get_all_listing_by_id = client.market.get_all_listing_by_id
     original_find_item_listings = client.market.find_item_listings
 
     client.market.get_item_name_id = lambda app_id, market_hash_name: 7178002
     client.market.get_item_orders_histogram = lambda **kwargs: {"kind": "histogram", "kwargs": kwargs}
     client.market.get_item_orders_summary = lambda **kwargs: {"kind": "summary", "kwargs": kwargs}
+    client.market.get_item_listings_map = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "listings_map",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
     client.market.get_all_item_listings_summary = lambda app_id, market_hash_name, **kwargs: {
         "kind": "all_listings",
         "app_id": app_id,
         "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+    client.market.get_all_item_listings_map = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "all_listings_map",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+    client.market.get_listing_by_id = lambda app_id, market_hash_name, listing_id, **kwargs: {
+        "kind": "listing_by_id",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "listing_id": listing_id,
+        "kwargs": kwargs,
+    }
+    client.market.get_all_listing_by_id = lambda app_id, market_hash_name, listing_id, **kwargs: {
+        "kind": "all_listing_by_id",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "listing_id": listing_id,
         "kwargs": kwargs,
     }
     client.market.find_item_listings = lambda app_id, market_hash_name, **kwargs: {
@@ -2778,13 +2990,21 @@ def test_client_more_market_url_helpers_delegate_correctly() -> None:
     assert client.get_market_item_name_id_by_url(market_url) == 7178002
     assert client.get_market_item_orders_histogram_by_url(market_url)["kind"] == "histogram"
     assert client.get_market_item_orders_summary_by_url(market_url)["kind"] == "summary"
+    assert client.get_market_item_listings_map_by_url(market_url)["kind"] == "listings_map"
     assert client.get_all_market_item_listings_summary_by_url(market_url)["kind"] == "all_listings"
+    assert client.get_all_market_item_listings_map_by_url(market_url)["kind"] == "all_listings_map"
+    assert client.get_market_listing_by_id_by_url(market_url, "123")["kind"] == "listing_by_id"
+    assert client.get_all_market_listing_by_id_by_url(market_url, "123")["kind"] == "all_listing_by_id"
     assert client.find_market_item_listings_by_url(market_url, max_price=500)["kind"] == "find_listings"
 
     client.market.get_item_name_id = original_get_item_name_id
     client.market.get_item_orders_histogram = original_get_item_orders_histogram
     client.market.get_item_orders_summary = original_get_item_orders_summary
+    client.market.get_item_listings_map = original_get_item_listings_map
     client.market.get_all_item_listings_summary = original_get_all_item_listings_summary
+    client.market.get_all_item_listings_map = original_get_all_item_listings_map
+    client.market.get_listing_by_id = original_get_listing_by_id
+    client.market.get_all_listing_by_id = original_get_all_listing_by_id
     client.market.find_item_listings = original_find_item_listings
     client.close()
 
@@ -2796,22 +3016,26 @@ def test_client_inventory_url_helpers_delegate_correctly() -> None:
     original_get_inventory_items = client.get_inventory_items_for_user
     original_get_inventory_items_summary = client.get_inventory_items_summary_for_user
     original_get_inventory_item_counts = client.get_inventory_item_counts_for_user
+    original_get_inventory_item_by_asset_id = client.get_inventory_item_by_asset_id_for_user
     original_find_inventory_items = client.find_inventory_items_for_user
     original_get_full_inventory = client.get_full_inventory_for_user
     original_get_full_inventory_items = client.get_full_inventory_items_for_user
     original_get_full_inventory_items_summary = client.get_full_inventory_items_summary_for_user
     original_get_full_inventory_item_counts = client.get_full_inventory_item_counts_for_user
+    original_get_full_inventory_item_by_asset_id = client.get_full_inventory_item_by_asset_id_for_user
     original_find_full_inventory_items = client.find_full_inventory_items_for_user
 
     client.get_inventory_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory"}
     client.get_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_items"}
     client.get_inventory_items_summary_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_summary"}
     client.get_inventory_item_counts_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "inventory_counts"}
+    client.get_inventory_item_by_asset_id_for_user = lambda steam_id, app_id, context_id, asset_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "asset_id": asset_id, "kind": "inventory_asset"}
     client.find_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "find_inventory"}
     client.get_full_inventory_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory"}
     client.get_full_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_items"}
     client.get_full_inventory_items_summary_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_summary"}
     client.get_full_inventory_item_counts_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "full_inventory_counts"}
+    client.get_full_inventory_item_by_asset_id_for_user = lambda steam_id, app_id, context_id, asset_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "asset_id": asset_id, "kind": "full_inventory_asset"}
     client.find_full_inventory_items_for_user = lambda steam_id, app_id, context_id, **kwargs: {"steam_id": steam_id, "app_id": app_id, "context_id": context_id, "kind": "find_full_inventory"}
 
     inventory_url = "https://steamcommunity.com/inventory/76561197960435530/753/6"
@@ -2820,22 +3044,26 @@ def test_client_inventory_url_helpers_delegate_correctly() -> None:
     assert client.get_inventory_items_by_url(inventory_url)["kind"] == "inventory_items"
     assert client.get_inventory_items_summary_by_url(inventory_url)["kind"] == "inventory_summary"
     assert client.get_inventory_item_counts_by_url(inventory_url)["kind"] == "inventory_counts"
+    assert client.get_inventory_item_by_asset_id_by_url(inventory_url, "10")["kind"] == "inventory_asset"
     assert client.find_inventory_items_by_url(inventory_url)["kind"] == "find_inventory"
     assert client.get_full_inventory_by_url(inventory_url)["kind"] == "full_inventory"
     assert client.get_full_inventory_items_by_url(inventory_url)["kind"] == "full_inventory_items"
     assert client.get_full_inventory_items_summary_by_url(inventory_url)["kind"] == "full_inventory_summary"
     assert client.get_full_inventory_item_counts_by_url(inventory_url)["kind"] == "full_inventory_counts"
+    assert client.get_full_inventory_item_by_asset_id_by_url(inventory_url, "10")["kind"] == "full_inventory_asset"
     assert client.find_full_inventory_items_by_url(inventory_url)["kind"] == "find_full_inventory"
 
     client.get_inventory_for_user = original_get_inventory
     client.get_inventory_items_for_user = original_get_inventory_items
     client.get_inventory_items_summary_for_user = original_get_inventory_items_summary
     client.get_inventory_item_counts_for_user = original_get_inventory_item_counts
+    client.get_inventory_item_by_asset_id_for_user = original_get_inventory_item_by_asset_id
     client.find_inventory_items_for_user = original_find_inventory_items
     client.get_full_inventory_for_user = original_get_full_inventory
     client.get_full_inventory_items_for_user = original_get_full_inventory_items
     client.get_full_inventory_items_summary_for_user = original_get_full_inventory_items_summary
     client.get_full_inventory_item_counts_for_user = original_get_full_inventory_item_counts
+    client.get_full_inventory_item_by_asset_id_for_user = original_get_full_inventory_item_by_asset_id
     client.find_full_inventory_items_for_user = original_find_full_inventory_items
     client.close()
 
@@ -2874,6 +3102,8 @@ def test_client_market_convenience_helpers_delegate_to_market_service() -> None:
     original_get_item_orders_histogram = client.market.get_item_orders_histogram
     original_get_item_orders_summary = client.market.get_item_orders_summary
     original_get_price_history = client.market.get_price_history
+    original_get_item_listings_map = client.market.get_item_listings_map
+    original_get_listing_by_id = client.market.get_listing_by_id
 
     client.market.get_price_overview = lambda app_id, market_hash_name, **kwargs: {
         "kind": "overview",
@@ -2889,18 +3119,35 @@ def test_client_market_convenience_helpers_delegate_to_market_service() -> None:
         "app_id": app_id,
         "market_hash_name": market_hash_name,
     }
+    client.market.get_item_listings_map = lambda app_id, market_hash_name, **kwargs: {
+        "kind": "listings_map",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "kwargs": kwargs,
+    }
+    client.market.get_listing_by_id = lambda app_id, market_hash_name, listing_id, **kwargs: {
+        "kind": "listing_by_id",
+        "app_id": app_id,
+        "market_hash_name": market_hash_name,
+        "listing_id": listing_id,
+        "kwargs": kwargs,
+    }
 
     assert client.get_market_price_overview(730, "AK-47 | Example")["kind"] == "overview"
     assert client.get_market_item_name_id(730, "AK-47 | Example") == 7178002
     assert client.get_market_item_orders_histogram(app_id=730, market_hash_name="AK-47 | Example")["kind"] == "histogram"
     assert client.get_market_item_orders_summary(app_id=730, market_hash_name="AK-47 | Example")["kind"] == "summary"
     assert client.get_market_price_history(730, "AK-47 | Example")["kind"] == "history"
+    assert client.get_market_item_listings_map(730, "AK-47 | Example")["kind"] == "listings_map"
+    assert client.get_market_listing_by_id(730, "AK-47 | Example", "1")["kind"] == "listing_by_id"
 
     client.market.get_price_overview = original_get_price_overview
     client.market.get_item_name_id = original_get_item_name_id
     client.market.get_item_orders_histogram = original_get_item_orders_histogram
     client.market.get_item_orders_summary = original_get_item_orders_summary
     client.market.get_price_history = original_get_price_history
+    client.market.get_item_listings_map = original_get_item_listings_map
+    client.market.get_listing_by_id = original_get_listing_by_id
     client.close()
 
 
@@ -3909,6 +4156,40 @@ def test_groups_get_group_member_summaries_combines_member_ids_with_player_summa
     client.close()
 
 
+def test_groups_get_group_member_summaries_map_indexes_members_by_steam_id() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>1</memberCount>
+                  <members>
+                    <steamID64>76561197960435530</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"}
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test-key", session=session)
+
+    result = client.get_group_member_summaries_map("Valve", limit=1)
+
+    assert result["members_by_steam_id"]["76561197960435530"]["personaname"] == "Robin"
+    client.close()
+
+
 def test_groups_get_all_group_member_summaries_combines_aggregated_members_with_player_summaries() -> None:
     session = SequenceSession(
         [
@@ -3960,6 +4241,44 @@ def test_groups_get_all_group_member_summaries_combines_aggregated_members_with_
     assert result["pages_fetched"] == 2
     assert result["member_ids"] == ["76561197960435530", "76561197960287930"]
     assert len(result["members"]) == 2
+    client.close()
+
+
+def test_groups_get_all_group_member_summaries_map_indexes_members_by_steam_id() -> None:
+    session = SequenceSession(
+        [
+            DummyResponse(
+                text="""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <memberList>
+                  <groupID64>103582791429521412</groupID64>
+                  <memberCount>2</memberCount>
+                  <totalPages>1</totalPages>
+                  <currentPage>1</currentPage>
+                  <members>
+                    <steamID64>76561197960435530</steamID64>
+                    <steamID64>76561197960287930</steamID64>
+                  </members>
+                </memberList>
+                """
+            ),
+            DummyResponse(
+                json_data={
+                    "response": {
+                        "players": [
+                            {"steamid": "76561197960435530", "personaname": "Robin"},
+                            {"steamid": "76561197960287930", "personaname": "Other"},
+                        ]
+                    }
+                }
+            ),
+        ]
+    )
+    client = SteamClient(api_key="test-key", session=session)
+
+    result = client.get_all_group_member_summaries_map("Valve", max_pages=1, max_members=2)
+
+    assert set(result["members_by_steam_id"]) == {"76561197960435530", "76561197960287930"}
     client.close()
 
 
@@ -4110,6 +4429,8 @@ def test_client_group_helpers_delegate_to_groups_service() -> None:
     original_check_name_availability = client.groups.check_name_availability
     original_check_url_availability = client.groups.check_url_availability
     original_check_tag_availability = client.groups.check_tag_availability
+    original_get_group_member_summaries_map = client.groups.get_group_member_summaries_map
+    original_get_all_group_member_summaries_map = client.groups.get_all_group_member_summaries_map
     original_create_group = client.groups.create_group
 
     client.groups.fetch_group_id64 = lambda group_url: "103582791429521412"
@@ -4117,6 +4438,8 @@ def test_client_group_helpers_delegate_to_groups_service() -> None:
     client.groups.check_name_availability = lambda name: {"kind": "name", "value": name}
     client.groups.check_url_availability = lambda group_url: {"kind": "url", "value": group_url}
     client.groups.check_tag_availability = lambda abbreviation: {"kind": "tag", "value": abbreviation}
+    client.groups.get_group_member_summaries_map = lambda group_url, **kwargs: {"kind": "member_map", "group_url": group_url, "kwargs": kwargs}
+    client.groups.get_all_group_member_summaries_map = lambda group_url, **kwargs: {"kind": "all_member_map", "group_url": group_url, "kwargs": kwargs}
     client.groups.create_group = lambda **kwargs: {"kind": "create", "kwargs": kwargs}
 
     assert client.get_group_id64("Valve") == "103582791429521412"
@@ -4124,6 +4447,8 @@ def test_client_group_helpers_delegate_to_groups_service() -> None:
     assert client.check_group_name_availability("Example")["value"] == "Example"
     assert client.check_group_url_availability("example-group")["kind"] == "url"
     assert client.check_group_tag_availability("EX")["kind"] == "tag"
+    assert client.get_group_member_summaries_map("Valve", limit=5)["kind"] == "member_map"
+    assert client.get_all_group_member_summaries_map("Valve", max_pages=2)["kind"] == "all_member_map"
     assert client.create_group(name="Example", abbreviation="EX", group_url="example")["kwargs"]["group_url"] == "example"
 
     client.groups.fetch_group_id64 = original_fetch_group_id64
@@ -4131,6 +4456,8 @@ def test_client_group_helpers_delegate_to_groups_service() -> None:
     client.groups.check_name_availability = original_check_name_availability
     client.groups.check_url_availability = original_check_url_availability
     client.groups.check_tag_availability = original_check_tag_availability
+    client.groups.get_group_member_summaries_map = original_get_group_member_summaries_map
+    client.groups.get_all_group_member_summaries_map = original_get_all_group_member_summaries_map
     client.groups.create_group = original_create_group
     client.close()
 

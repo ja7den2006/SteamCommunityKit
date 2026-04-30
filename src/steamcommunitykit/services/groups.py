@@ -263,6 +263,15 @@ class GroupsService:
             "raw": payload,
         }
 
+    def get_group_member_summaries_map(self, group_url: str, *, page: int = 1, limit: Optional[int] = None) -> dict:
+        payload = self.get_group_member_summaries(group_url, page=page, limit=limit)
+        payload["members_by_steam_id"] = {
+            str(member.get("steamid")): member
+            for member in payload.get("members", [])
+            if member.get("steamid")
+        }
+        return payload
+
     def get_all_group_member_summaries(
         self,
         group_url: str,
@@ -288,6 +297,27 @@ class GroupsService:
             "members": users.get_player_summaries(member_ids) if member_ids else [],
             "raw": payload,
         }
+
+    def get_all_group_member_summaries_map(
+        self,
+        group_url: str,
+        *,
+        start_page: int = 1,
+        max_pages: Optional[int] = None,
+        max_members: Optional[int] = None,
+    ) -> dict:
+        payload = self.get_all_group_member_summaries(
+            group_url,
+            start_page=start_page,
+            max_pages=max_pages,
+            max_members=max_members,
+        )
+        payload["members_by_steam_id"] = {
+            str(member.get("steamid")): member
+            for member in payload.get("members", [])
+            if member.get("steamid")
+        }
+        return payload
 
     def create_group(
         self,

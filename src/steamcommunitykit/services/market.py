@@ -5,7 +5,7 @@ import re
 from urllib.parse import quote
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
-from steamcommunitykit.exceptions import SteamResponseError
+from steamcommunitykit.exceptions import SteamNotFoundError, SteamResponseError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import ensure_not_blank, validate_app_id, validate_uint32
 
@@ -430,6 +430,64 @@ class MarketService:
             "raw": pages[-1].get("raw") if pages else {},
         }
 
+    def get_item_listings_map(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        payload = self.get_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        payload["listings_by_id"] = {
+            str(listing.get("listing_id")): listing
+            for listing in payload.get("listings", [])
+            if listing.get("listing_id") is not None
+        }
+        return payload
+
+    def get_all_item_listings_map(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        payload = self.get_all_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+        payload["listings_by_id"] = {
+            str(listing.get("listing_id")): listing
+            for listing in payload.get("listings", [])
+            if listing.get("listing_id") is not None
+        }
+        return payload
+
     def find_item_listings(
         self,
         app_id,
@@ -468,6 +526,80 @@ class MarketService:
             "pages_fetched": payload.get("pages_fetched", 0),
             "raw": payload,
         }
+
+    def get_listing_by_id(
+        self,
+        app_id,
+        market_hash_name: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        payload = self.get_item_listings_map(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+        normalized_listing_id = ensure_not_blank(str(listing_id), "listing_id")
+        listing = payload.get("listings_by_id", {}).get(normalized_listing_id)
+        if listing is None:
+            raise SteamNotFoundError(
+                "Steam did not return a market listing for the requested listing id.",
+                status_code=404,
+                payload={
+                    "app_id": validate_app_id(app_id),
+                    "market_hash_name": ensure_not_blank(market_hash_name, "market_hash_name"),
+                    "listing_id": normalized_listing_id,
+                },
+            )
+        return listing
+
+    def get_all_listing_by_id(
+        self,
+        app_id,
+        market_hash_name: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        payload = self.get_all_item_listings_map(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+        normalized_listing_id = ensure_not_blank(str(listing_id), "listing_id")
+        listing = payload.get("listings_by_id", {}).get(normalized_listing_id)
+        if listing is None:
+            raise SteamNotFoundError(
+                "Steam did not return a paginated market listing for the requested listing id.",
+                status_code=404,
+                payload={
+                    "app_id": validate_app_id(app_id),
+                    "market_hash_name": ensure_not_blank(market_hash_name, "market_hash_name"),
+                    "listing_id": normalized_listing_id,
+                },
+            )
+        return listing
 
     def get_item_listings_page_html(self, app_id, market_hash_name: str) -> str:
         return self.transport.request(

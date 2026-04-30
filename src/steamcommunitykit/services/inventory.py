@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from steamcommunitykit.constants import COMMUNITY_BASE_URL
-from steamcommunitykit.exceptions import SteamResponseError
+from steamcommunitykit.exceptions import SteamNotFoundError, SteamResponseError
 from steamcommunitykit.http import SteamHTTPTransport
 from steamcommunitykit.utils import (
     validate_app_id,
@@ -443,6 +443,40 @@ class InventoryService:
             "raw": payload,
         }
 
+    def get_inventory_item_by_asset_id(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        payload = self.get_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+        normalized_asset_id = validate_uint64(asset_id, "asset_id")
+        item = payload.get("items_by_asset_id", {}).get(normalized_asset_id)
+        if item is None:
+            raise SteamNotFoundError(
+                "Steam did not return an inventory item for the requested asset id.",
+                status_code=404,
+                payload={
+                    "steamid": payload.get("steamid"),
+                    "app_id": payload.get("app_id"),
+                    "context_id": payload.get("context_id"),
+                    "asset_id": normalized_asset_id,
+                },
+            )
+        return item
+
     def get_full_inventory_items_summary(
         self,
         steam_id,
@@ -482,6 +516,42 @@ class InventoryService:
             "pages": payload.get("pages", []),
             "raw": payload,
         }
+
+    def get_full_inventory_item_by_asset_id(
+        self,
+        steam_id,
+        app_id,
+        context_id,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        payload = self.get_full_inventory_items_summary(
+            steam_id,
+            app_id,
+            context_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+        normalized_asset_id = validate_uint64(asset_id, "asset_id")
+        item = payload.get("items_by_asset_id", {}).get(normalized_asset_id)
+        if item is None:
+            raise SteamNotFoundError(
+                "Steam did not return a paginated inventory item for the requested asset id.",
+                status_code=404,
+                payload={
+                    "steamid": payload.get("steamid"),
+                    "app_id": payload.get("app_id"),
+                    "context_id": payload.get("context_id"),
+                    "asset_id": normalized_asset_id,
+                },
+            )
+        return item
 
     def find_full_inventory_items(
         self,

@@ -692,9 +692,31 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
         ),
     )
     run_check(
+        "Market Listings Map",
+        lambda: _format_market_listings_map(
+            client.get_market_item_listings_map(
+                args.market_app_id,
+                args.market_hash_name,
+                count=10,
+            )
+        ),
+    )
+    run_check(
         "Market Listings Multi-Page",
         lambda: _format_market_listings_summary(
             client.get_all_market_item_listings_summary(
+                args.market_app_id,
+                args.market_hash_name,
+                count=10,
+                max_pages=2,
+                max_listings=15,
+            )
+        ),
+    )
+    run_check(
+        "Market Listings Multi-Page Map",
+        lambda: _format_market_listings_map(
+            client.get_all_market_item_listings_map(
                 args.market_app_id,
                 args.market_hash_name,
                 count=10,
@@ -713,6 +735,14 @@ def run_no_key_public_suite(client: SteamClient, args) -> None:
                 max_listings=15,
             )
         ),
+    )
+    run_check(
+        "Get Market Listing By ID",
+        lambda: _format_market_listing_lookup(client, args),
+    )
+    run_check(
+        "Get Market Listing By ID From URL",
+        lambda: _format_market_listing_lookup_by_url(client, args),
     )
     run_check(
         "Find Market Listings",
@@ -821,6 +851,10 @@ def run_community_suite(client: SteamClient, args) -> None:
     run_check(
         "Get Group Member Summaries",
         lambda: _format_group_member_summaries(client.get_group_member_summaries(args.group_url, limit=5)),
+    )
+    run_check(
+        "Get Group Member Summaries Map",
+        lambda: _format_group_member_summaries_map(client.get_group_member_summaries_map(args.group_url, limit=5)),
     )
     if client.api_key:
         run_check(
@@ -1177,6 +1211,20 @@ def _format_group_member_summaries(payload: dict) -> str:
     return "members={0} first={1}".format(len(members), first_name)
 
 
+def _format_group_member_summaries_map(payload: dict) -> str:
+    members = payload.get("members", [])
+    members_by_steam_id = payload.get("members_by_steam_id", {})
+    first_id = next(iter(members_by_steam_id), "<none>")
+    first_name = members[0].get("personaname") if members else "<none>"
+    first_name = _safe_console_text(first_name)
+    return "members={0} indexed={1} first_id={2} first={3}".format(
+        len(members),
+        len(members_by_steam_id),
+        first_id,
+        first_name,
+    )
+
+
 def _format_group_details(payload: dict) -> str:
     return "group={0} members={1} online={2}".format(
         _safe_console_text(payload.get("group_name") or "<none>"),
@@ -1221,6 +1269,16 @@ def _format_market_listings_summary(payload: dict) -> str:
     )
 
 
+def _format_market_listings_map(payload: dict) -> str:
+    listings_by_id = payload.get("listings_by_id", {})
+    first_listing_id = next(iter(listings_by_id), "<none>")
+    return "listings={0} indexed={1} first_listing_id={2}".format(
+        len(payload.get("listings", [])),
+        len(listings_by_id),
+        first_listing_id,
+    )
+
+
 def _format_found_market_listings(payload: dict) -> str:
     listings = payload.get("listings", [])
     first_price = None
@@ -1249,6 +1307,43 @@ def _format_market_find(payload: dict) -> str:
         _safe_console_text(match.get("market_hash_name") or match.get("name") or "<none>"),
         payload.get("matched_exactly"),
     )
+
+
+def _format_market_listing_lookup(client: SteamClient, args) -> str:
+    listings_map = client.get_market_item_listings_map(
+        args.market_app_id,
+        args.market_hash_name,
+        count=10,
+    )
+    listing_id = next(iter(listings_map.get("listings_by_id", {})), None)
+    if listing_id is None:
+        return "skipped: no market listings returned"
+    listing = client.get_market_listing_by_id(
+        args.market_app_id,
+        args.market_hash_name,
+        listing_id,
+        count=10,
+    )
+    price = listing.get("converted_price") or listing.get("price")
+    return "listing_id={0} price={1}".format(listing.get("listing_id"), price)
+
+
+def _format_market_listing_lookup_by_url(client: SteamClient, args) -> str:
+    market_url = build_market_listing_url(args.market_app_id, args.market_hash_name)
+    listings_map = client.get_market_item_listings_map_by_url(
+        market_url,
+        count=10,
+    )
+    listing_id = next(iter(listings_map.get("listings_by_id", {})), None)
+    if listing_id is None:
+        return "skipped: no market listings returned"
+    listing = client.get_market_listing_by_id_by_url(
+        market_url,
+        listing_id,
+        count=10,
+    )
+    price = listing.get("converted_price") or listing.get("price")
+    return "listing_id={0} price={1}".format(listing.get("listing_id"), price)
 
 
 def _format_inventory_items(payload: dict) -> str:

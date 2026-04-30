@@ -250,6 +250,9 @@ class SteamClient:
     def get_group_member_summaries(self, group_url: str, *, page: int = 1, limit: Optional[int] = None) -> dict:
         return self.groups.get_group_member_summaries(group_url, page=page, limit=limit)
 
+    def get_group_member_summaries_map(self, group_url: str, *, page: int = 1, limit: Optional[int] = None) -> dict:
+        return self.groups.get_group_member_summaries_map(group_url, page=page, limit=limit)
+
     def get_all_group_member_summaries(
         self,
         group_url: str,
@@ -259,6 +262,21 @@ class SteamClient:
         max_members: Optional[int] = None,
     ) -> dict:
         return self.groups.get_all_group_member_summaries(
+            group_url,
+            start_page=start_page,
+            max_pages=max_pages,
+            max_members=max_members,
+        )
+
+    def get_all_group_member_summaries_map(
+        self,
+        group_url: str,
+        *,
+        start_page: int = 1,
+        max_pages: Optional[int] = None,
+        max_members: Optional[int] = None,
+    ) -> dict:
+        return self.groups.get_all_group_member_summaries_map(
             group_url,
             start_page=start_page,
             max_pages=max_pages,
@@ -795,6 +813,48 @@ class SteamClient:
             start_asset_id=start_asset_id,
         )
 
+    def get_inventory_item_by_asset_id_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_inventory_item_by_asset_id(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            asset_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
+    def get_inventory_item_by_asset_id_by_url(
+        self,
+        inventory_url: str,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_inventory_item_by_asset_id_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            asset_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+        )
+
     def find_inventory_items_for_user(
         self,
         identifier,
@@ -1089,6 +1149,27 @@ class SteamClient:
             currency=currency,
         )
 
+    def get_market_item_listings_map(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        return self.market.get_item_listings_map(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+
     def get_market_item_listings_summary_by_url(
         self,
         market_url: str,
@@ -1101,6 +1182,27 @@ class SteamClient:
     ) -> dict:
         parsed = parse_market_listing_url(market_url)
         return self.get_market_item_listings_summary(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+
+    def get_market_item_listings_map_by_url(
+        self,
+        market_url: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_item_listings_map(
             parsed["app_id"],
             parsed["market_hash_name"],
             start=start,
@@ -1124,6 +1226,31 @@ class SteamClient:
         max_listings=None,
     ) -> dict:
         return self.market.get_all_item_listings_summary(
+            app_id,
+            market_hash_name,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+
+    def get_all_market_item_listings_map(
+        self,
+        app_id,
+        market_hash_name: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        return self.market.get_all_item_listings_map(
             app_id,
             market_hash_name,
             start=start,
@@ -1160,6 +1287,31 @@ class SteamClient:
             max_listings=max_listings,
         )
 
+    def get_all_market_item_listings_map_by_url(
+        self,
+        market_url: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_all_market_item_listings_map(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+
     def find_market_item_listings(
         self,
         app_id,
@@ -1185,6 +1337,106 @@ class SteamClient:
             max_pages=max_pages,
             max_listings=max_listings,
             max_price=max_price,
+        )
+
+    def get_market_listing_by_id(
+        self,
+        app_id,
+        market_hash_name: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        return self.market.get_listing_by_id(
+            app_id,
+            market_hash_name,
+            listing_id,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+
+    def get_market_listing_by_id_by_url(
+        self,
+        market_url: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_market_listing_by_id(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            listing_id,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+        )
+
+    def get_all_market_listing_by_id(
+        self,
+        app_id,
+        market_hash_name: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        return self.market.get_all_listing_by_id(
+            app_id,
+            market_hash_name,
+            listing_id,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
+        )
+
+    def get_all_market_listing_by_id_by_url(
+        self,
+        market_url: str,
+        listing_id,
+        *,
+        start: int = 0,
+        count: int = 10,
+        country: str = "US",
+        language: str = "english",
+        currency: int = 1,
+        max_pages=None,
+        max_listings=None,
+    ) -> dict:
+        parsed = parse_market_listing_url(market_url)
+        return self.get_all_market_listing_by_id(
+            parsed["app_id"],
+            parsed["market_hash_name"],
+            listing_id,
+            start=start,
+            count=count,
+            country=country,
+            language=language,
+            currency=currency,
+            max_pages=max_pages,
+            max_listings=max_listings,
         )
 
     def find_market_item_listings_by_url(
@@ -1401,6 +1653,52 @@ class SteamClient:
             parsed["steam_id"],
             parsed["app_id"],
             parsed["context_id"],
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def get_full_inventory_item_by_asset_id_for_user(
+        self,
+        identifier,
+        app_id,
+        context_id,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+        url_type=None,
+    ) -> dict:
+        return self.inventory.get_full_inventory_item_by_asset_id(
+            self.resolve_steam_id(identifier, url_type=url_type),
+            app_id,
+            context_id,
+            asset_id,
+            language=language,
+            count=count,
+            start_asset_id=start_asset_id,
+            max_pages=max_pages,
+        )
+
+    def get_full_inventory_item_by_asset_id_by_url(
+        self,
+        inventory_url: str,
+        asset_id,
+        *,
+        language: Optional[str] = None,
+        count: int = 2000,
+        start_asset_id=None,
+        max_pages: Optional[int] = None,
+    ) -> dict:
+        parsed = parse_inventory_url(inventory_url)
+        return self.get_full_inventory_item_by_asset_id_for_user(
+            parsed["steam_id"],
+            parsed["app_id"],
+            parsed["context_id"],
+            asset_id,
             language=language,
             count=count,
             start_asset_id=start_asset_id,
