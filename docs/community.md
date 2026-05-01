@@ -38,6 +38,8 @@ client.update_summary("Profile summary text")
 client.update_location(country="US", state="IN", city="123")
 ```
 
+The single-field helpers only submit the field you asked to change. Steam sometimes replies with warning-style `success: 2` payloads for profile saves, so SteamCommunityKit verifies the requested field after the write before treating the call as successful.
+
 ## Privacy
 
 Read privacy:
@@ -105,4 +107,3 @@ Useful fields include:
 - `registration_form_visible`
 - `revoke_available`
 - `reason`
-

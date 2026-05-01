@@ -60,7 +60,9 @@ client.login_to_community("YOUR_USERNAME", "YOUR_PASSWORD")
 print(client.get_account_info())
 ```
 
-If Steam Guard is required, pass a code:
+If Steam Guard is required and your script is running in an interactive terminal, `login_to_community(...)` prompts automatically.
+
+If you already have the code, you can pass it directly:
 
 ```python
 client.login_to_community(
@@ -70,13 +72,13 @@ client.login_to_community(
 )
 ```
 
-Or provide a callback:
+Advanced callers can still provide their own code provider:
 
 ```python
 client.login_to_community(
     "YOUR_USERNAME",
     "YOUR_PASSWORD",
-    steam_guard_code_provider=lambda prompt: input("Steam Guard code: "),
+    steam_guard_code_provider=lambda confirmation: get_code_somehow(confirmation),
 )
 ```
 
@@ -145,4 +147,3 @@ This is useful when you need to hit a supported Steam Community page that does n
 
 - `SteamResponseError`
   - Steam returned malformed or unexpected content
-

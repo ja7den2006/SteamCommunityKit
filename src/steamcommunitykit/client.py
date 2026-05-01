@@ -1957,7 +1957,7 @@ class SteamClient:
         persistence: bool = True,
         steam_guard_code: Optional[str] = None,
         steam_guard_code_provider: Optional[Callable[[dict], str]] = None,
-        prompt_for_steam_guard: bool = False,
+        prompt_for_steam_guard: Optional[bool] = None,
         poll_interval: float = 1.5,
         poll_timeout: float = 60.0,
     ) -> CredentialLoginResult:

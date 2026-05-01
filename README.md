@@ -64,6 +64,8 @@ print(client.get_trade_offer_url())
 print(client.get_group_membership_state("Valve"))
 ```
 
+If Steam Guard is required, the credential login flow prompts automatically in an interactive terminal. You can still pass `steam_guard_code="12345"` explicitly for non-interactive runs.
+
 ## Verified Workflow Examples
 
 ### Save and restore a logged-in session

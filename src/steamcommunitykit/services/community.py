@@ -39,14 +39,133 @@ class CommunityService:
             ) from exc
 
     @staticmethod
-    def _ensure_ajax_success(response: dict, action: str) -> dict:
+    def _normalize_ajax_error_message(message: object) -> str:
+        return html.unescape(
+            str(message or "")
+            .replace("<br />", "\n")
+            .replace("<br \\/>", "\n")
+            .replace("<br/>", "\n")
+        ).strip()
+
+    @classmethod
+    def _ensure_ajax_success(cls, response: dict, action: str) -> dict:
         success = response.get("success")
-        error_message = html.unescape(str(response.get("errmsg", "")).replace("<br />", " ").strip())
+        error_message = cls._normalize_ajax_error_message(response.get("errmsg"))
         if success == 1:
             return response
         if error_message:
-            raise SteamResponseError("{0} failed: {1}".format(action, error_message))
+            raise SteamResponseError(
+                "{0} failed: {1}".format(action, " ".join(error_message.splitlines()))
+            )
         raise SteamResponseError("{0} failed.".format(action))
+
+    @staticmethod
+    def _profile_edit_state_value(profile_edit_state: dict, field_name: str):
+        if field_name == "personaName":
+            return profile_edit_state.get("strPersonaName", "")
+        if field_name == "real_name":
+            return profile_edit_state.get("strRealName", "")
+        if field_name == "summary":
+            return profile_edit_state.get("strSummary", "")
+        if field_name == "customURL":
+            return profile_edit_state.get("strCustomURL", "")
+        if field_name == "country":
+            return (profile_edit_state.get("LocationData") or {}).get("locCountryCode", "")
+        if field_name == "state":
+            return (profile_edit_state.get("LocationData") or {}).get("locStateCode", "")
+        if field_name == "city":
+            return (profile_edit_state.get("LocationData") or {}).get("locCityCode", "")
+        if field_name == "hide_profile_awards":
+            return int(bool((profile_edit_state.get("ProfilePreferences") or {}).get("hide_profile_awards", 0)))
+        return None
+
+    @staticmethod
+    def _normalize_profile_edit_value(field_name: str, value):
+        if field_name == "hide_profile_awards":
+            return int(bool(value))
+        if value is None:
+            return ""
+        return str(value)
+
+    def _verify_profile_edit_updates(
+        self,
+        steam_id: str,
+        requested_updates: Dict[str, object],
+    ) -> dict:
+        profile_edit_state = self.get_profile_edit_state(steam_id)
+        mismatches = {}
+        for field_name, expected_value in requested_updates.items():
+            actual_value = self._profile_edit_state_value(profile_edit_state, field_name)
+            if self._normalize_profile_edit_value(
+                field_name,
+                actual_value,
+            ) != self._normalize_profile_edit_value(field_name, expected_value):
+                mismatches[field_name] = {
+                    "expected": expected_value,
+                    "actual": actual_value,
+                }
+        return {
+            "profile_edit_state": profile_edit_state,
+            "mismatches": mismatches,
+        }
+
+    def _finalize_profile_edit_response(
+        self,
+        steam_id: str,
+        response: dict,
+        requested_updates: Dict[str, object],
+    ) -> dict:
+        success = response.get("success")
+        if success == 1:
+            return response
+        error_message = self._normalize_ajax_error_message(response.get("errmsg"))
+        if success != 2:
+            if error_message:
+                raise SteamResponseError(
+                    "Profile update failed: {0}".format(" ".join(error_message.splitlines()))
+                )
+            raise SteamResponseError("Profile update failed.")
+
+        try:
+            verification = self._verify_profile_edit_updates(steam_id, requested_updates)
+        except Exception as exc:
+            if error_message:
+                raise SteamResponseError(
+                    "Profile update returned an ambiguous Steam response: {0}".format(
+                        " ".join(error_message.splitlines())
+                    )
+                ) from exc
+            raise SteamResponseError("Profile update returned an ambiguous Steam response.") from exc
+
+        if verification["mismatches"]:
+            mismatch_details = ", ".join(
+                "{0} expected {1!r} but Steam now reports {2!r}".format(
+                    field_name,
+                    details["expected"],
+                    details["actual"],
+                )
+                for field_name, details in verification["mismatches"].items()
+            )
+            if error_message:
+                raise SteamResponseError(
+                    "Profile update failed: {0} ({1})".format(
+                        " ".join(error_message.splitlines()),
+                        mismatch_details,
+                    )
+                )
+            raise SteamResponseError(
+                "Profile update failed: {0}".format(mismatch_details)
+            )
+
+        finalized = dict(response)
+        finalized["verified"] = True
+        finalized["verified_fields"] = sorted(requested_updates.keys())
+        finalized["warnings"] = [
+            line.strip()
+            for line in error_message.splitlines()
+            if line.strip()
+        ]
+        return finalized
 
     def _resolved_steam_id(self, steam_id=None) -> str:
         if steam_id is None:
@@ -322,41 +441,44 @@ class CommunityService:
         country: Optional[str] = None,
         state: Optional[str] = None,
         city: Optional[Union[int, str]] = None,
-        hide_profile_awards: bool = False,
+        hide_profile_awards: Optional[bool] = None,
     ) -> dict:
         credentials = self.transport.require_community_credentials()
         normalized_steam_id = self._resolved_steam_id(steam_id)
         data = {
             "sessionID": credentials.session_id,
             "type": "profileSave",
-            "hide_profile_awards": int(hide_profile_awards),
             "json": 1,
         }
+        requested_updates = {}
         if persona_name is not None:
-            data["personaName"] = ensure_not_blank(persona_name, "persona_name")
+            normalized_persona_name = ensure_not_blank(persona_name, "persona_name")
+            data["personaName"] = normalized_persona_name
+            requested_updates["personaName"] = normalized_persona_name
         if real_name is not None:
             data["real_name"] = real_name
+            requested_updates["real_name"] = real_name
         if summary is not None:
             data["summary"] = summary
+            requested_updates["summary"] = summary
         if custom_url is not None:
             data["customURL"] = custom_url
+            requested_updates["customURL"] = custom_url
         if country is not None:
             data["country"] = country
+            requested_updates["country"] = country
         if state is not None:
             data["state"] = state
+            requested_updates["state"] = state
         if city is not None:
             data["city"] = str(city)
+            requested_updates["city"] = str(city)
+        if hide_profile_awards is not None:
+            normalized_hide_profile_awards = int(bool(hide_profile_awards))
+            data["hide_profile_awards"] = normalized_hide_profile_awards
+            requested_updates["hide_profile_awards"] = normalized_hide_profile_awards
 
-        editable_fields = {
-            "personaName",
-            "real_name",
-            "summary",
-            "customURL",
-            "country",
-            "state",
-            "city",
-        }
-        if not any(field in data for field in editable_fields):
+        if not requested_updates:
             raise SteamValidationError("edit_profile requires at least one editable field.")
 
         response = self.transport.request(
@@ -366,7 +488,11 @@ class CommunityService:
             headers=self._headers(f"{COMMUNITY_BASE_URL}/profiles/{normalized_steam_id}/edit/"),
             cookies=self._community_cookies(),
         )
-        return self._ensure_ajax_success(response, "Profile update")
+        return self._finalize_profile_edit_response(
+            normalized_steam_id,
+            response,
+            requested_updates,
+        )
 
     def upload_avatar(self, image_path: Union[str, Path], steam_id=None) -> dict:
         credentials = self.transport.require_community_credentials()

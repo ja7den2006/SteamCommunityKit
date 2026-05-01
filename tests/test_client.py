@@ -3851,9 +3851,11 @@ def test_auth_login_with_credentials_raises_clear_error_when_guard_code_missing(
 
     original_begin = client.auth.begin_auth_session_via_credentials
     original_poll = client.auth.poll_auth_session_status
+    original_should_prompt = client.auth._should_prompt_for_steam_guard
 
     client.auth.begin_auth_session_via_credentials = lambda *args, **kwargs: started
     client.auth.poll_auth_session_status = lambda *args, **kwargs: {"had_remote_interaction": False}
+    client.auth._should_prompt_for_steam_guard = lambda *_args, **_kwargs: False
 
     with pytest.raises(SteamAuthenticationError, match="Steam Guard mobile authenticator code is required"):
         client.auth.login_with_credentials(
@@ -3865,6 +3867,55 @@ def test_auth_login_with_credentials_raises_clear_error_when_guard_code_missing(
 
     client.auth.begin_auth_session_via_credentials = original_begin
     client.auth.poll_auth_session_status = original_poll
+    client.auth._should_prompt_for_steam_guard = original_should_prompt
+    client.close()
+
+
+def test_auth_login_with_credentials_auto_prompts_for_guard_code_when_interactive() -> None:
+    client = SteamClient(api_key="test")
+    started = {
+        "client_id": 1,
+        "request_id": "req",
+        "steamid": "76561197960435530",
+        "allowed_confirmations": [{"confirmation_type": 3}],
+    }
+    polls = [
+        {"had_remote_interaction": False},
+        {
+            "account_name": "tester",
+            "access_token": "access123",
+            "refresh_token": "refresh123",
+            "had_remote_interaction": True,
+        },
+    ]
+    updates = []
+    prompts = []
+
+    original_begin = client.auth.begin_auth_session_via_credentials
+    original_poll = client.auth.poll_auth_session_status
+    original_update = client.auth.update_auth_session_with_steam_guard_code
+    original_prompt = client.auth.prompt_for_steam_guard_code
+    original_should_prompt = client.auth._should_prompt_for_steam_guard
+
+    client.auth.begin_auth_session_via_credentials = lambda *args, **kwargs: started
+    client.auth.poll_auth_session_status = lambda *args, **kwargs: polls.pop(0)
+    client.auth.update_auth_session_with_steam_guard_code = (
+        lambda client_id, steam_id, code_type, code: updates.append((client_id, steam_id, code_type, code))
+    )
+    client.auth.prompt_for_steam_guard_code = lambda confirmation: prompts.append(confirmation) or "112233"
+    client.auth._should_prompt_for_steam_guard = lambda *_args, **_kwargs: True
+
+    result = client.auth.login_with_credentials("tester", "secret")
+
+    client.auth.begin_auth_session_via_credentials = original_begin
+    client.auth.poll_auth_session_status = original_poll
+    client.auth.update_auth_session_with_steam_guard_code = original_update
+    client.auth.prompt_for_steam_guard_code = original_prompt
+    client.auth._should_prompt_for_steam_guard = original_should_prompt
+
+    assert result.access_token == "access123"
+    assert len(prompts) == 1
+    assert updates == [(1, "76561197960435530", 3, "112233")]
     client.close()
 
 
@@ -3915,11 +3966,86 @@ def test_community_edit_profile_posts_profile_save_payload() -> None:
     assert call["data"]["state"] == "FL"
     assert call["data"]["city"] == "12345"
     assert call["data"]["json"] == 1
+    assert "hide_profile_awards" not in call["data"]
+    client.close()
+
+
+def test_community_edit_profile_includes_hide_profile_awards_when_requested() -> None:
+    session = RecordingSession(DummyResponse(json_data={"success": 1}))
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    client.community.edit_profile(hide_profile_awards=True)
+
+    call = session.calls[0]
+    assert call["data"]["hide_profile_awards"] == 1
+    client.close()
+
+
+def test_community_edit_profile_accepts_verified_success_two_payload() -> None:
+    html = """
+    <div id="profile_edit_config"
+         data-userinfo="{&quot;logged_in&quot;:true,&quot;steamid&quot;:&quot;76561197960435530&quot;}"
+         data-profile-edit="{&quot;strPersonaName&quot;:&quot;Example&quot;,&quot;strCustomURL&quot;:&quot;example-custom-url&quot;,&quot;strRealName&quot;:&quot;&quot;,&quot;strSummary&quot;:&quot;&quot;,&quot;LocationData&quot;:{&quot;locCountryCode&quot;:&quot;&quot;,&quot;locStateCode&quot;:&quot;&quot;,&quot;locCityCode&quot;:&quot;&quot;},&quot;ProfilePreferences&quot;:{&quot;hide_profile_awards&quot;:0},&quot;Privacy&quot;:{&quot;PrivacySettings&quot;:{&quot;PrivacyProfile&quot;:1},&quot;eCommentPermission&quot;:0}}"></div>
+    """
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={"success": 2, "errmsg": "Bad value<br />"}),
+            DummyResponse(text=html),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    response = client.community.edit_profile(custom_url="example-custom-url")
+
+    assert response["verified"] is True
+    assert response["verified_fields"] == ["customURL"]
+    assert response["warnings"] == ["Bad value"]
+    client.close()
+
+
+def test_community_edit_profile_raises_on_unverified_success_two_payload() -> None:
+    html = """
+    <div id="profile_edit_config"
+         data-userinfo="{&quot;logged_in&quot;:true,&quot;steamid&quot;:&quot;76561197960435530&quot;}"
+         data-profile-edit="{&quot;strPersonaName&quot;:&quot;Example&quot;,&quot;strCustomURL&quot;:&quot;&quot;,&quot;strRealName&quot;:&quot;&quot;,&quot;strSummary&quot;:&quot;&quot;,&quot;LocationData&quot;:{&quot;locCountryCode&quot;:&quot;&quot;,&quot;locStateCode&quot;:&quot;&quot;,&quot;locCityCode&quot;:&quot;&quot;},&quot;ProfilePreferences&quot;:{&quot;hide_profile_awards&quot;:0},&quot;Privacy&quot;:{&quot;PrivacySettings&quot;:{&quot;PrivacyProfile&quot;:1},&quot;eCommentPermission&quot;:0}}"></div>
+    """
+    session = SequenceSession(
+        [
+            DummyResponse(json_data={"success": 2, "errmsg": "Bad value<br />"}),
+            DummyResponse(text=html),
+        ]
+    )
+    client = SteamClient(api_key="test", session=session)
+    client.set_community_credentials(
+        CommunityCredentials(
+            steam_id="76561197960435530",
+            session_id="session123",
+            steam_login_secure="securecookie123",
+        )
+    )
+
+    with pytest.raises(SteamResponseError, match="customURL expected 'example-custom-url' but Steam now reports ''"):
+        client.community.edit_profile(custom_url="example-custom-url")
+
     client.close()
 
 
 def test_community_edit_profile_raises_on_error_payload() -> None:
-    session = RecordingSession(DummyResponse(json_data={"success": 2, "errmsg": "Bad value<br />"}))
+    session = RecordingSession(DummyResponse(json_data={"success": 0, "errmsg": "Bad value<br />"}))
     client = SteamClient(api_key="test", session=session)
     client.set_community_credentials(
         CommunityCredentials(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import sys
 import time
 import urllib.parse
 from collections.abc import Mapping
@@ -176,7 +177,7 @@ class AuthenticationService:
         persistence: bool = True,
         steam_guard_code: Optional[str] = None,
         steam_guard_code_provider: Optional[Callable[[dict], str]] = None,
-        prompt_for_steam_guard: bool = False,
+        prompt_for_steam_guard: Optional[bool] = None,
         poll_interval: float = 1.5,
         poll_timeout: float = 60.0,
     ) -> CredentialLoginResult:
@@ -200,8 +201,8 @@ class AuthenticationService:
             if confirmation is not None:
                 code = steam_guard_code
                 if code is None and steam_guard_code_provider is not None:
-                    code = steam_guard_code_provider(started)
-                if code is None and prompt_for_steam_guard:
+                    code = steam_guard_code_provider(confirmation)
+                if code is None and self._should_prompt_for_steam_guard(prompt_for_steam_guard):
                     code = self.prompt_for_steam_guard_code(confirmation)
                 if code is None:
                     raise SteamAuthenticationError(
@@ -295,6 +296,25 @@ class AuthenticationService:
         if confirmation_type == 2:
             return "A Steam Guard email code is required for this login."
         return "A Steam Guard confirmation is required for this login."
+
+    @staticmethod
+    def _terminal_can_prompt() -> bool:
+        stdin = getattr(sys, "stdin", None)
+        stdout = getattr(sys, "stdout", None)
+        return bool(
+            stdin is not None
+            and stdout is not None
+            and hasattr(stdin, "isatty")
+            and hasattr(stdout, "isatty")
+            and stdin.isatty()
+            and stdout.isatty()
+        )
+
+    @classmethod
+    def _should_prompt_for_steam_guard(cls, prompt_for_steam_guard: Optional[bool]) -> bool:
+        if prompt_for_steam_guard is not None:
+            return bool(prompt_for_steam_guard)
+        return cls._terminal_can_prompt()
 
     @staticmethod
     def prompt_for_steam_guard_code(confirmation: dict) -> str:
